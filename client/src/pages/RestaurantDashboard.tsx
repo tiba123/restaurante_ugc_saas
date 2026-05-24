@@ -5,11 +5,15 @@ import {
   LayoutDashboard, Video, CheckCircle, XCircle, Eye, Heart,
   MessageSquare, Star, TrendingUp, Clock, Users, BarChart2,
   Settings, Play, Check, X, ChevronRight, AlertCircle,
-  Building2, Camera, Upload
+  Building2, Camera, Upload, Tag, Sparkles
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Cell, PieChart, Pie, Legend
+} from "recharts";
 
 type Tab = "overview" | "pending" | "videos" | "settings";
 
@@ -117,6 +121,200 @@ function VideoApprovalCard({ video, onApprove, onReject, isPending }: {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Tag Distribution Chart ──────────────────────────────────────────────────
+const CATEGORY_META: Record<string, { label: string; color: string; bg: string }> = {
+  food:       { label: "Comida",          color: "#E07A5F", bg: "#FDF0EC" },
+  service:    { label: "Atendimento",     color: "#3D405B", bg: "#ECEDF3" },
+  ambiance:   { label: "Ambiente",        color: "#81B29A", bg: "#EEF5F1" },
+  value:      { label: "Custo-Benefício", color: "#C9A84C", bg: "#FEF8EC" },
+  experience: { label: "Experiência",     color: "#9C6B98", bg: "#F4EEF4" },
+};
+
+function TagDistributionChart({ tagDistribution, categoryDistribution }: {
+  tagDistribution: Array<{ label: string; category: string; emoji: string; count: number; views: number; likes: number }>;
+  categoryDistribution: Array<{ category: string; count: number; color: string; label: string }>;
+}) {
+  const [view, setView] = useState<"tags" | "categories">("tags");
+
+  if (!tagDistribution || tagDistribution.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h3 className="font-semibold text-foreground">Pontos Fortes</h3>
+        </div>
+        <div className="text-center py-10">
+          <Tag className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Aprove vídeos para ver a análise de pontos fortes.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const topTag = tagDistribution[0];
+  const totalMentions = tagDistribution.reduce((s, t) => s + t.count, 0);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <div>
+            <h3 className="font-semibold text-foreground">Análise de Pontos Fortes</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{totalMentions} menções em {tagDistribution.length} tags únicas</p>
+          </div>
+        </div>
+        <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+          <button
+            onClick={() => setView("tags")}
+            className={`px-3 py-1.5 font-medium transition-colors ${
+              view === "tags" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            Por Tag
+          </button>
+          <button
+            onClick={() => setView("categories")}
+            className={`px-3 py-1.5 font-medium transition-colors ${
+              view === "categories" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            Por Categoria
+          </button>
+        </div>
+      </div>
+
+      {/* Top insight banner */}
+      {topTag && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl"
+          style={{ backgroundColor: CATEGORY_META[topTag.category]?.bg ?? "#f5f5f5" }}
+        >
+          <span className="text-2xl">{topTag.emoji}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">Ponto forte #1</p>
+            <p className="font-semibold text-foreground text-sm">{topTag.label}</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="font-bold text-lg" style={{ color: CATEGORY_META[topTag.category]?.color ?? "#333" }}>
+              {topTag.count}x
+            </p>
+            <p className="text-xs text-muted-foreground">{topTag.views.toLocaleString()} views</p>
+          </div>
+        </div>
+      )}
+
+      {/* Chart */}
+      {view === "tags" ? (
+        <div>
+          <div style={{ height: Math.max(200, tagDistribution.length * 40) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={tagDistribution.map(t => ({ ...t, name: `${t.emoji} ${t.label}` }))}
+                layout="vertical"
+                margin={{ top: 0, right: 40, left: 8, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
+                <XAxis type="number" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={160}
+                  tick={{ fontSize: 11, fill: "var(--foreground)" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: "var(--muted)", opacity: 0.5 }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-card border border-border rounded-xl p-3 shadow-lg text-xs">
+                        <p className="font-semibold text-foreground mb-1">{d.emoji} {d.label}</p>
+                        <p className="text-muted-foreground">Menções: <span className="font-bold text-foreground">{d.count}</span></p>
+                        <p className="text-muted-foreground">Views: <span className="font-bold text-foreground">{d.views.toLocaleString()}</span></p>
+                        <p className="text-muted-foreground">Curtidas: <span className="font-bold text-foreground">{d.likes}</span></p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={28}>
+                  {tagDistribution.map((entry, index) => (
+                    <Cell key={index} fill={CATEGORY_META[entry.category]?.color ?? "#E07A5F"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Legend */}
+          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
+            {Object.entries(CATEGORY_META).map(([key, meta]) => (
+              <span key={key} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: meta.bg, color: meta.color }}>
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
+                {meta.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={categoryDistribution}
+                  dataKey="count"
+                  nameKey="label"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  innerRadius={50}
+                  paddingAngle={3}
+                  label={({ label, percent }) => `${label} ${(percent * 100).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {categoryDistribution.map((entry, index) => (
+                    <Cell key={index} fill={CATEGORY_META[entry.category]?.color ?? "#E07A5F"} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-card border border-border rounded-xl p-3 shadow-lg text-xs">
+                        <p className="font-semibold text-foreground mb-1">{d.label}</p>
+                        <p className="text-muted-foreground">Menções: <span className="font-bold text-foreground">{d.count}</span></p>
+                      </div>
+                    );
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {categoryDistribution.map((cat) => {
+              const meta = CATEGORY_META[cat.category];
+              const pct = totalMentions > 0 ? Math.round((cat.count / totalMentions) * 100) : 0;
+              return (
+                <div key={cat.category} className="flex items-center gap-2 p-2.5 rounded-lg" style={{ backgroundColor: meta?.bg ?? "#f5f5f5" }}>
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: meta?.color ?? "#999" }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate" style={{ color: meta?.color }}>{meta?.label ?? cat.category}</p>
+                    <p className="text-xs text-muted-foreground">{cat.count} menções · {pct}%</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -309,6 +507,12 @@ export default function RestaurantDashboardPage() {
                   <MetricCard icon={Heart} label="Curtidas" value={metrics.totalLikes} sub="Em vídeos aprovados" />
                   <MetricCard icon={Star} label="Avaliação Média" value={Number(metrics.averageRating).toFixed(1)} sub={`${metrics.totalReviews} avaliações`} />
                 </div>
+
+                {/* Tag Distribution Chart */}
+                <TagDistributionChart
+                  tagDistribution={metrics.tagDistribution ?? []}
+                  categoryDistribution={metrics.categoryDistribution ?? []}
+                />
 
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="bg-card border border-border rounded-xl p-5">

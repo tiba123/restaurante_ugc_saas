@@ -462,6 +462,36 @@ const restaurantDashboardRouter = router({
     const totalLikes = approved.reduce((sum, v) => sum + v.likes, 0);
     const totalComments = approved.reduce((sum, v) => sum + v.comments, 0);
     const reviews = await getReviewsByRestaurant(restaurant.id);
+
+    // ── Tag distribution from approved videos ──────────────────────────────
+    const tagCounts: Record<string, { label: string; category: string; emoji: string; count: number; views: number; likes: number }> = {};
+    for (const video of approved) {
+      const rawTags = Array.isArray(video.tags) ? (video.tags as string[]) : [];
+      const parsed = deserializeTags(rawTags);
+      for (const tag of parsed) {
+        const key = `${tag.label}|${tag.category}`;
+        if (!tagCounts[key]) {
+          tagCounts[key] = { label: tag.label, category: tag.category, emoji: tag.emoji, count: 0, views: 0, likes: 0 };
+        }
+        tagCounts[key].count += 1;
+        tagCounts[key].views += video.views;
+        tagCounts[key].likes += video.likes;
+      }
+    }
+    const tagDistribution = Object.values(tagCounts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12);
+
+    // ── Category summary ───────────────────────────────────────────────────
+    const categoryCounts: Record<string, number> = {};
+    for (const t of tagDistribution) {
+      categoryCounts[t.category] = (categoryCounts[t.category] ?? 0) + t.count;
+    }
+    const categoryDistribution = Object.entries(categoryCounts).map(([category, count]) => {
+      const meta = getTagMeta(category as any);
+      return { category, count, color: meta.color, label: meta.label };
+    }).sort((a, b) => b.count - a.count);
+
     return {
       restaurant,
       totalVideos: allVideos.length,
@@ -473,6 +503,8 @@ const restaurantDashboardRouter = router({
       totalComments,
       totalReviews: reviews.length,
       averageRating: restaurant.averageRating,
+      tagDistribution,
+      categoryDistribution,
     };
   }),
 });
