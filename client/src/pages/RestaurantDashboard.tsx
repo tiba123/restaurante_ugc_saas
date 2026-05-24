@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Video, CheckCircle, XCircle, Eye, Heart,
   MessageSquare, Star, TrendingUp, Clock, Users, BarChart2,
   Settings, Play, Check, X, ChevronRight, AlertCircle,
-  Building2, Camera, Upload, Tag, Sparkles
+  Building2, Camera, Upload, Tag, Sparkles, Filter
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -134,9 +134,28 @@ const CATEGORY_META: Record<string, { label: string; color: string; bg: string }
   experience: { label: "Experiência",     color: "#9C6B98", bg: "#F4EEF4" },
 };
 
-function TagDistributionChart({ tagDistribution, categoryDistribution }: {
+// ─── Tag parser (shared with Feed) ─────────────────────────────────────────
+function parseVideoTags(rawTags: unknown[]): Array<{ label: string; category: string; emoji: string }> {
+  return (rawTags as string[]).map((item) => {
+    if (typeof item !== "string") return { label: String(item), category: "food", emoji: "🍽️" };
+    const pipeIdx = item.lastIndexOf("|");
+    if (pipeIdx === -1) return { label: item.replace(/^[\s\S]{1,2}\s/, "").trim() || item, category: "food", emoji: "🍽️" };
+    const labelWithEmoji = item.slice(0, pipeIdx);
+    const category = item.slice(pipeIdx + 1);
+    const spaceIdx = labelWithEmoji.indexOf(" ");
+    const emoji = spaceIdx > -1 ? labelWithEmoji.slice(0, spaceIdx) : "🍽️";
+    const label = spaceIdx > -1 ? labelWithEmoji.slice(spaceIdx + 1) : labelWithEmoji;
+    return { label, category, emoji };
+  });
+}
+
+function TagDistributionChart({ tagDistribution, categoryDistribution, onTagClick, onCategoryClick, selectedTag, selectedCategory }: {
   tagDistribution: Array<{ label: string; category: string; emoji: string; count: number; views: number; likes: number }>;
   categoryDistribution: Array<{ category: string; count: number; color: string; label: string }>;
+  onTagClick: (tag: { label: string; category: string; emoji: string } | null) => void;
+  onCategoryClick: (category: string | null) => void;
+  selectedTag: { label: string; category: string; emoji: string } | null;
+  selectedCategory: string | null;
 }) {
   const [view, setView] = useState<"tags" | "categories">("tags");
 
@@ -209,6 +228,12 @@ function TagDistributionChart({ tagDistribution, categoryDistribution }: {
         </div>
       )}
 
+      {/* Click hint */}
+      <p className="text-xs text-muted-foreground flex items-center gap-1">
+        <Tag className="w-3 h-3" />
+        Clique em uma tag ou categoria para filtrar os vídeos relacionados
+      </p>
+
       {/* Chart */}
       {view === "tags" ? (
         <div>
@@ -218,6 +243,13 @@ function TagDistributionChart({ tagDistribution, categoryDistribution }: {
                 data={tagDistribution.map(t => ({ ...t, name: `${t.emoji} ${t.label}` }))}
                 layout="vertical"
                 margin={{ top: 0, right: 40, left: 8, bottom: 0 }}
+                onClick={(data) => {
+                  if (!data?.activePayload?.length) return;
+                  const d = data.activePayload[0].payload;
+                  const isSelected = selectedTag?.label === d.label && selectedTag?.category === d.category;
+                  onTagClick(isSelected ? null : { label: d.label, category: d.category, emoji: d.emoji });
+                }}
+                style={{ cursor: "pointer" }}
               >
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
                 <XAxis type="number" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} />
@@ -230,36 +262,64 @@ function TagDistributionChart({ tagDistribution, categoryDistribution }: {
                   axisLine={false}
                 />
                 <Tooltip
-                  cursor={{ fill: "var(--muted)", opacity: 0.5 }}
+                  cursor={{ fill: "var(--muted)", opacity: 0.4 }}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
+                    const isSelected = selectedTag?.label === d.label;
                     return (
                       <div className="bg-card border border-border rounded-xl p-3 shadow-lg text-xs">
                         <p className="font-semibold text-foreground mb-1">{d.emoji} {d.label}</p>
                         <p className="text-muted-foreground">Menções: <span className="font-bold text-foreground">{d.count}</span></p>
                         <p className="text-muted-foreground">Views: <span className="font-bold text-foreground">{d.views.toLocaleString()}</span></p>
                         <p className="text-muted-foreground">Curtidas: <span className="font-bold text-foreground">{d.likes}</span></p>
+                        <p className="mt-1.5 font-medium" style={{ color: CATEGORY_META[d.category]?.color }}>
+                          {isSelected ? "❌ Clique para limpar" : "🔍 Clique para filtrar vídeos"}
+                        </p>
                       </div>
                     );
                   }}
                 />
                 <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={28}>
-                  {tagDistribution.map((entry, index) => (
-                    <Cell key={index} fill={CATEGORY_META[entry.category]?.color ?? "#E07A5F"} />
-                  ))}
+                  {tagDistribution.map((entry, index) => {
+                    const isSelected = selectedTag?.label === entry.label && selectedTag?.category === entry.category;
+                    const baseColor = CATEGORY_META[entry.category]?.color ?? "#E07A5F";
+                    return (
+                      <Cell
+                        key={index}
+                        fill={baseColor}
+                        opacity={selectedTag && !isSelected ? 0.3 : 1}
+                        stroke={isSelected ? baseColor : "none"}
+                        strokeWidth={isSelected ? 2 : 0}
+                      />
+                    );
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          {/* Legend */}
+          {/* Legend / category filter pills */}
           <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
-            {Object.entries(CATEGORY_META).map(([key, meta]) => (
-              <span key={key} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: meta.bg, color: meta.color }}>
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
-                {meta.label}
-              </span>
-            ))}
+            {Object.entries(CATEGORY_META).map(([key, meta]) => {
+              const isActive = selectedCategory === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => { onCategoryClick(isActive ? null : key); onTagClick(null); }}
+                  className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-all ${
+                    isActive ? "ring-2 ring-offset-1" : "opacity-70 hover:opacity-100"
+                  }`}
+                  style={{
+                    backgroundColor: meta.bg,
+                    color: meta.color,
+                  }}
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
+                  {meta.label}
+                  {isActive && <X className="w-3 h-3 ml-0.5" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -278,19 +338,40 @@ function TagDistributionChart({ tagDistribution, categoryDistribution }: {
                   paddingAngle={3}
                   label={({ label, percent }) => `${label} ${(percent * 100).toFixed(0)}%`}
                   labelLine={false}
+                  onClick={(data) => {
+                    const cat = data?.category as string;
+                    if (!cat) return;
+                    const isSelected = selectedCategory === cat;
+                    onCategoryClick(isSelected ? null : cat);
+                    onTagClick(null);
+                  }}
+                  style={{ cursor: "pointer" }}
                 >
-                  {categoryDistribution.map((entry, index) => (
-                    <Cell key={index} fill={CATEGORY_META[entry.category]?.color ?? "#E07A5F"} />
-                  ))}
+                  {categoryDistribution.map((entry, index) => {
+                    const isSelected = selectedCategory === entry.category;
+                    return (
+                      <Cell
+                        key={index}
+                        fill={CATEGORY_META[entry.category]?.color ?? "#E07A5F"}
+                        opacity={selectedCategory && !isSelected ? 0.3 : 1}
+                        stroke={isSelected ? "#fff" : "none"}
+                        strokeWidth={isSelected ? 3 : 0}
+                      />
+                    );
+                  })}
                 </Pie>
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
+                    const isSelected = selectedCategory === d.category;
                     return (
                       <div className="bg-card border border-border rounded-xl p-3 shadow-lg text-xs">
                         <p className="font-semibold text-foreground mb-1">{d.label}</p>
                         <p className="text-muted-foreground">Menções: <span className="font-bold text-foreground">{d.count}</span></p>
+                        <p className="mt-1.5 font-medium" style={{ color: CATEGORY_META[d.category]?.color }}>
+                          {isSelected ? "❌ Clique para limpar" : "🔍 Clique para filtrar vídeos"}
+                        </p>
                       </div>
                     );
                   }}
@@ -302,14 +383,23 @@ function TagDistributionChart({ tagDistribution, categoryDistribution }: {
             {categoryDistribution.map((cat) => {
               const meta = CATEGORY_META[cat.category];
               const pct = totalMentions > 0 ? Math.round((cat.count / totalMentions) * 100) : 0;
+              const isSelected = selectedCategory === cat.category;
               return (
-                <div key={cat.category} className="flex items-center gap-2 p-2.5 rounded-lg" style={{ backgroundColor: meta?.bg ?? "#f5f5f5" }}>
+                <button
+                  key={cat.category}
+                  onClick={() => { onCategoryClick(isSelected ? null : cat.category); onTagClick(null); }}
+                  className={`flex items-center gap-2 p-2.5 rounded-lg text-left transition-all ${
+                    isSelected ? "ring-2 ring-offset-1" : "opacity-80 hover:opacity-100"
+                  }`}
+                  style={{ backgroundColor: meta?.bg ?? "#f5f5f5", outlineColor: meta?.color }}
+                >
                   <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: meta?.color ?? "#999" }} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold truncate" style={{ color: meta?.color }}>{meta?.label ?? cat.category}</p>
                     <p className="text-xs text-muted-foreground">{cat.count} menções · {pct}%</p>
                   </div>
-                </div>
+                  {isSelected && <X className="w-3.5 h-3.5 shrink-0" style={{ color: meta?.color }} />}
+                </button>
               );
             })}
           </div>
@@ -334,8 +424,26 @@ export default function RestaurantDashboardPage() {
     undefined, { enabled: isAuthenticated && !!restaurant }
   );
   const { data: allVideos = [] } = trpc.restaurantDashboard.allVideos.useQuery(
-    undefined, { enabled: isAuthenticated && !!restaurant && activeTab === "videos" }
+    undefined, { enabled: isAuthenticated && !!restaurant }
   );
+
+  // ── Tag filter state ─────────────────────────────────────────────────────
+  const [selectedTag, setSelectedTag] = useState<{ label: string; category: string; emoji: string } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Videos filtered by selected tag or category
+  const filteredVideos = allVideos.filter((video) => {
+    if (!selectedTag && !selectedCategory) return true;
+    const rawTags = Array.isArray(video.tags) ? (video.tags as unknown[]) : [];
+    const parsed = parseVideoTags(rawTags);
+    if (selectedTag) {
+      return parsed.some((t) => t.label === selectedTag.label && t.category === selectedTag.category);
+    }
+    if (selectedCategory) {
+      return parsed.some((t) => t.category === selectedCategory);
+    }
+    return true;
+  });
 
   const approveMutation = trpc.restaurantDashboard.approveVideo.useMutation({
     onSuccess: () => {
@@ -508,11 +616,96 @@ export default function RestaurantDashboardPage() {
                   <MetricCard icon={Star} label="Avaliação Média" value={Number(metrics.averageRating).toFixed(1)} sub={`${metrics.totalReviews} avaliações`} />
                 </div>
 
-                {/* Tag Distribution Chart */}
+                {/* Tag Distribution Chart — interativo */}
                 <TagDistributionChart
                   tagDistribution={metrics.tagDistribution ?? []}
                   categoryDistribution={metrics.categoryDistribution ?? []}
+                  onTagClick={setSelectedTag}
+                  onCategoryClick={setSelectedCategory}
+                  selectedTag={selectedTag}
+                  selectedCategory={selectedCategory}
                 />
+
+                {/* Filtered videos panel — shown when a tag or category is selected */}
+                {(selectedTag || selectedCategory) && (
+                  <div className="bg-card border border-border rounded-xl p-5 space-y-4 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Filter className="w-4 h-4 text-primary" />
+                        <div>
+                          <h3 className="font-semibold text-foreground text-sm">
+                            {selectedTag
+                              ? `Vídeos com “${selectedTag.emoji} ${selectedTag.label}”`
+                              : `Vídeos de “${CATEGORY_META[selectedCategory!]?.label ?? selectedCategory}”`}
+                          </h3>
+                          <p className="text-xs text-muted-foreground">
+                            {filteredVideos.filter(v => v.status === "approved").length} vídeo(s) aprovado(s) encontrado(s)
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setSelectedTag(null); setSelectedCategory(null); }}
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-muted"
+                      >
+                        <X className="w-3.5 h-3.5" /> Limpar filtro
+                      </button>
+                    </div>
+
+                    {filteredVideos.filter(v => v.status === "approved").length === 0 ? (
+                      <div className="text-center py-8">
+                        <Video className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground">Nenhum vídeo aprovado com esta tag.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredVideos.filter(v => v.status === "approved").map((video) => {
+                          const rawTags = Array.isArray(video.tags) ? (video.tags as unknown[]) : [];
+                          const parsedTags = parseVideoTags(rawTags);
+                          return (
+                            <div key={video.id} className="flex gap-3 p-3 rounded-xl bg-muted/40 border border-border/50">
+                              <div className="w-14 h-20 bg-muted rounded-lg overflow-hidden shrink-0">
+                                {video.thumbnailUrl ? (
+                                  <img src={video.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center"><Play className="w-4 h-4 text-muted-foreground/50" /></div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-foreground text-sm line-clamp-1 mb-0.5">{video.title || "Sem título"}</p>
+                                <p className="text-xs text-muted-foreground mb-2">por {(video as { user?: { name?: string } }).user?.name || "Usuário"}</p>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
+                                  <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{video.views}</span>
+                                  <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{video.likes}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {parsedTags.map((tag, i) => {
+                                    const isHighlighted = selectedTag
+                                      ? tag.label === selectedTag.label
+                                      : tag.category === selectedCategory;
+                                    const meta = CATEGORY_META[tag.category];
+                                    return (
+                                      <span
+                                        key={i}
+                                        className="inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full font-medium transition-all"
+                                        style={{
+                                          backgroundColor: isHighlighted ? (meta?.color ?? "#E07A5F") : (meta?.bg ?? "#f5f5f5"),
+                                          color: isHighlighted ? "#fff" : (meta?.color ?? "#333"),
+                                          fontWeight: isHighlighted ? 700 : 500,
+                                        }}
+                                      >
+                                        {tag.emoji} {tag.label}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="bg-card border border-border rounded-xl p-5">

@@ -55,3 +55,4 @@
 - [x] Sistema de tags automáticas via IA (LLM) nos vídeos do feed com badges coloridos por categoria
 - [x] Seed de tags para vídeos existentes (15 vídeos atualizados)
 - [x] Gráfico de distribuição de tags no dashboard do restaurante (barras horizontais + pizza por categoria)
+- [x] Gráfico de tags interativo: clique em barra/fatia/pill filtra vídeos relacionados no painel abaixo
