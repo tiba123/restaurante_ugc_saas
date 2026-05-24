@@ -38,6 +38,20 @@ import {
   upsertRestaurantAccount,
   getAllReviews,
   updateVideoTags,
+  sendFriendRequest,
+  respondFriendRequest,
+  removeFriend,
+  getFriendshipStatus,
+  getFriends,
+  getPendingRequests,
+  getSentRequests,
+  searchUsers,
+  getUserPublicProfile,
+  getFriendsFeed,
+  logActivity,
+  recordVisit,
+  getUserVisitedRestaurants,
+  getFriendsWhoVisited,
 } from "./db";
 import { storagePut } from "./storage";
 import { generateAutoTags, serializeTags, deserializeTags, getTagMeta } from "./autoTags";
@@ -120,7 +134,7 @@ const videosRouter = router({
       });
       const serializedTags = serializeTags(autoTags);
 
-      await createVideo({
+      const newVideo = await createVideo({
         userId,
         restaurantId: input.restaurantId,
         title: input.title,
@@ -134,6 +148,12 @@ const videosRouter = router({
         status: "pending",
         isPublic: false,
       });
+
+      // Log social activity
+      try {
+        await logActivity({ userId, type: "video_posted", restaurantId: input.restaurantId, videoId: newVideo?.id });
+        await recordVisit(userId, input.restaurantId);
+      } catch (e) { console.warn("[Activity] Failed to log upload activity:", e); }
 
       return { success: true, message: "Vídeo enviado para aprovação do restaurante.", autoTags };
     }),
@@ -287,7 +307,7 @@ const reviewsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      await createReview({
+      const newReview = await createReview({
         userId: ctx.user.id,
         restaurantId: input.restaurantId,
         rating: input.rating,
@@ -299,6 +319,11 @@ const reviewsRouter = router({
         ambianceRating: input.ambianceRating,
         valueRating: input.valueRating,
       });
+      // Log social activity
+      try {
+        await logActivity({ userId: ctx.user.id, type: "review_posted", restaurantId: input.restaurantId, reviewId: newReview?.id });
+        await recordVisit(ctx.user.id, input.restaurantId);
+      } catch (e) { console.warn("[Activity] Failed to log review activity:", e); }
       return { success: true };
     }),
 });
@@ -385,6 +410,10 @@ const restaurantDashboardRouter = router({
       await updateVideoStatus(input.videoId, "approved", { approvedBy: ctx.user.id });
       // Update restaurant video count
       await updateRestaurant(restaurant.id, { totalVideos: restaurant.totalVideos + 1 });
+      // Log social activity for the video owner
+      try {
+        await logActivity({ userId: video.userId, type: "video_approved", restaurantId: video.restaurantId, videoId: video.id });
+      } catch (e) { console.warn("[Activity] Failed to log approval activity:", e); }
       // Re-generate auto tags on approval if video has no tags or only manual tags
       const existingTags = Array.isArray(video.tags) ? video.tags : [];
       if (existingTags.length === 0) {
@@ -671,6 +700,136 @@ const adminRouter = router({
     }),
 });
 
+// ─── Social Router ────────────────────────────────────────────────────────────
+const socialRouter = router({
+  searchUsers: protectedProcedure
+    .input(z.object({ query: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const results = await searchUsers(input.query, ctx.user.id);
+      const enriched = await Promise.all(
+        results.map(async (u) => {
+          const fs = await getFriendshipStatus(ctx.user.id, u.id);
+          return { ...u, friendshipStatus: fs?.status ?? null, friendshipId: fs?.id ?? null, isRequester: fs?.requesterId === ctx.user.id };
+        })
+      );
+      return enriched;
+    }),
+
+  getProfile: protectedProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const profile = await getUserPublicProfile(input.userId);
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND" });
+      const fs = await getFriendshipStatus(ctx.user.id, input.userId);
+      const userVideos = await getVideosByUser(input.userId);
+      const approvedVideos = userVideos.filter((v) => v.status === "approved");
+      const userReviews = await getReviewsByUser(input.userId);
+      const visitedRestaurants = await getUserVisitedRestaurants(input.userId);
+      const friends = await getFriends(input.userId);
+      return {
+        ...profile,
+        friendshipStatus: fs?.status ?? null,
+        friendshipId: fs?.id ?? null,
+        isRequester: fs?.requesterId === ctx.user.id,
+        videos: approvedVideos.slice(0, 12),
+        reviews: userReviews.slice(0, 6),
+        visitedRestaurants: visitedRestaurants.slice(0, 12),
+        friends: friends.slice(0, 8),
+      };
+    }),
+
+  getMyProfile: protectedProcedure.query(async ({ ctx }) => {
+    const profile = await getUserPublicProfile(ctx.user.id);
+    if (!profile) throw new TRPCError({ code: "NOT_FOUND" });
+    const userVideos = await getVideosByUser(ctx.user.id);
+    const userReviews = await getReviewsByUser(ctx.user.id);
+    const visitedRestaurants = await getUserVisitedRestaurants(ctx.user.id);
+    const friends = await getFriends(ctx.user.id);
+    const pendingRequests = await getPendingRequests(ctx.user.id);
+    return {
+      ...profile,
+      videos: userVideos,
+      reviews: userReviews,
+      visitedRestaurants,
+      friends,
+      pendingRequestsCount: pendingRequests.length,
+    };
+  }),
+
+  updateProfile: protectedProcedure
+    .input(z.object({
+      name: z.string().optional(),
+      username: z.string().min(3).max(30).regex(/^[a-z0-9_]+$/).optional(),
+      bio: z.string().max(300).optional(),
+      city: z.string().optional(),
+      favoriteCuisine: z.string().optional(),
+      instagramHandle: z.string().optional(),
+      tiktokHandle: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await updateUserProfile(ctx.user.id, input as any);
+      return { success: true };
+    }),
+
+  uploadAvatar: protectedProcedure
+    .input(z.object({ base64: z.string(), mimeType: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const buf = Buffer.from(input.base64, "base64");
+      const key = `avatars/${ctx.user.id}-${Date.now()}.jpg`;
+      const { url } = await storagePut(key, buf, input.mimeType);
+      await updateUserProfile(ctx.user.id, { avatarUrl: url } as any);
+      return { url };
+    }),
+
+  uploadCover: protectedProcedure
+    .input(z.object({ base64: z.string(), mimeType: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const buf = Buffer.from(input.base64, "base64");
+      const key = `covers/${ctx.user.id}-${Date.now()}.jpg`;
+      const { url } = await storagePut(key, buf, input.mimeType);
+      await updateUserProfile(ctx.user.id, { coverUrl: url } as any);
+      return { url };
+    }),
+
+  sendRequest: protectedProcedure
+    .input(z.object({ addresseeId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.id === input.addresseeId) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode adicionar a si mesmo." });
+      await sendFriendRequest(ctx.user.id, input.addresseeId);
+      return { success: true };
+    }),
+
+  respondRequest: protectedProcedure
+    .input(z.object({ friendshipId: z.number(), action: z.enum(["accepted", "declined"]) }))
+    .mutation(async ({ ctx, input }) => {
+      await respondFriendRequest(input.friendshipId, ctx.user.id, input.action);
+      return { success: true };
+    }),
+
+  removeFriend: protectedProcedure
+    .input(z.object({ friendId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await removeFriend(ctx.user.id, input.friendId);
+      return { success: true };
+    }),
+
+  listFriends: protectedProcedure.query(async ({ ctx }) => getFriends(ctx.user.id)),
+
+  pendingRequests: protectedProcedure.query(async ({ ctx }) => getPendingRequests(ctx.user.id)),
+
+  sentRequests: protectedProcedure.query(async ({ ctx }) => getSentRequests(ctx.user.id)),
+
+  friendsFeed: protectedProcedure
+    .input(z.object({ limit: z.number().default(30), offset: z.number().default(0) }))
+    .query(async ({ ctx, input }) => getFriendsFeed(ctx.user.id, input.limit, input.offset)),
+
+  friendsWhoVisited: protectedProcedure
+    .input(z.object({ restaurantId: z.number() }))
+    .query(async ({ ctx, input }) => getFriendsWhoVisited(input.restaurantId, ctx.user.id)),
+
+  myVisitedRestaurants: protectedProcedure.query(async ({ ctx }) => getUserVisitedRestaurants(ctx.user.id)),
+});
+
 // ─── App Router ───────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
@@ -681,6 +840,7 @@ export const appRouter = router({
   consumer: consumerRouter,
   restaurantDashboard: restaurantDashboardRouter,
   admin: adminRouter,
+  social: socialRouter,
 });
 
 export type AppRouter = typeof appRouter;

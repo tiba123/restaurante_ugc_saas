@@ -15,15 +15,22 @@ export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
+  username: varchar("username", { length: 64 }).unique(),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   avatarUrl: text("avatarUrl"),
+  coverUrl: text("coverUrl"),
   bio: text("bio"),
   city: varchar("city", { length: 100 }).default("São Paulo"),
+  favoriteCuisine: varchar("favoriteCuisine", { length: 100 }),
+  instagramHandle: varchar("instagramHandle", { length: 100 }),
+  tiktokHandle: varchar("tiktokHandle", { length: 100 }),
   totalVideos: int("totalVideos").default(0).notNull(),
   totalLikes: int("totalLikes").default(0).notNull(),
   totalReviews: int("totalReviews").default(0).notNull(),
+  totalRestaurantsVisited: int("totalRestaurantsVisited").default(0).notNull(),
+  totalFriends: int("totalFriends").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -218,6 +225,55 @@ export const userBenefits = mysqlTable("user_benefits", {
   claimedAt: timestamp("claimedAt").defaultNow().notNull(),
   usedAt: timestamp("usedAt"),
 });
+
+// ─── Friendships ────────────────────────────────────────────────────────────
+export const friendships = mysqlTable("friendships", {
+  id: int("id").autoincrement().primaryKey(),
+  requesterId: int("requesterId").notNull(),   // who sent the request
+  addresseeId: int("addresseeId").notNull(),   // who received the request
+  status: mysqlEnum("status", ["pending", "accepted", "declined", "blocked"])
+    .default("pending")
+    .notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Friendship = typeof friendships.$inferSelect;
+
+// ─── User Activities (social feed) ───────────────────────────────────────────
+export const userActivities = mysqlTable("user_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  type: mysqlEnum("type", [
+    "video_posted",
+    "video_approved",
+    "review_posted",
+    "restaurant_visited",
+    "achievement_earned",
+    "friendship_started",
+  ]).notNull(),
+  restaurantId: int("restaurantId"),   // nullable
+  videoId: int("videoId"),             // nullable
+  reviewId: int("reviewId"),           // nullable
+  achievementId: int("achievementId"), // nullable
+  friendId: int("friendId"),           // nullable
+  metadata: json("metadata"),          // extra data (e.g. rating, tags)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserActivity = typeof userActivities.$inferSelect;
+
+// ─── Restaurant Visits ────────────────────────────────────────────────────────
+export const restaurantVisits = mysqlTable("restaurant_visits", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  restaurantId: int("restaurantId").notNull(),
+  visitedAt: timestamp("visitedAt").defaultNow().notNull(),
+  videoId: int("videoId"),   // linked video if any
+  reviewId: int("reviewId"), // linked review if any
+});
+
+export type RestaurantVisit = typeof restaurantVisits.$inferSelect;
 
 // ─── Platform Stats (cached) ──────────────────────────────────────────────────
 export const platformStats = mysqlTable("platform_stats", {

@@ -10,13 +10,16 @@ import {
   platformStats,
   restaurantAccounts,
   restaurants,
+  restaurantVisits,
   reviews,
   userAchievements,
+  userActivities,
   userBenefits,
   users,
   videoComments,
   videoLikes,
   videos,
+  friendships,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -198,7 +201,7 @@ export async function createVideo(data: InsertVideo) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
   const result = await db.insert(videos).values(data);
-  return result;
+  return { id: Number((result as any).insertId) };
 }
 
 export async function getVideoById(id: number) {
@@ -335,7 +338,8 @@ export async function getVideoComments(videoId: number) {
 export async function createReview(data: InsertReview) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  await db.insert(reviews).values(data);
+  const result = await db.insert(reviews).values(data);
+  const reviewId = Number((result as any).insertId);
 
   // Update restaurant average rating
   const allReviews = await db
@@ -350,6 +354,7 @@ export async function createReview(data: InsertReview) {
       totalReviews: allReviews.length,
     })
     .where(eq(restaurants.id, data.restaurantId));
+  return { id: reviewId };
 }
 
 export async function getReviewsByRestaurant(restaurantId: number, limit = 20, offset = 0) {
@@ -435,4 +440,308 @@ export async function getPlatformStats() {
     totalViews: Number(totalViewsRes[0]?.total ?? 0),
     pendingVideos: Number(pendingVideosRes[0]?.count ?? 0),
   };
+}
+
+// ─── Friendships ─────────────────────────────────────────────────────────────
+export async function sendFriendRequest(requesterId: number, addresseeId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  // Check if already exists
+  const existing = await db
+    .select()
+    .from(friendships)
+    .where(
+      or(
+        and(eq(friendships.requesterId, requesterId), eq(friendships.addresseeId, addresseeId)),
+        and(eq(friendships.requesterId, addresseeId), eq(friendships.addresseeId, requesterId))
+      ) as any
+    )
+    .limit(1);
+  if (existing.length > 0) return existing[0];
+  await db.insert(friendships).values({ requesterId, addresseeId, status: "pending" });
+}
+
+export async function respondFriendRequest(
+  friendshipId: number,
+  userId: number,
+  action: "accepted" | "declined"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const row = await db.select().from(friendships).where(eq(friendships.id, friendshipId)).limit(1);
+  if (!row[0] || row[0].addresseeId !== userId) throw new Error("Not authorized");
+  await db.update(friendships).set({ status: action }).where(eq(friendships.id, friendshipId));
+
+  if (action === "accepted") {
+    // Increment friend count for both
+    await db.update(users).set({ totalFriends: sql`${users.totalFriends} + 1` }).where(eq(users.id, row[0].requesterId));
+    await db.update(users).set({ totalFriends: sql`${users.totalFriends} + 1` }).where(eq(users.id, userId));
+    // Log activity for both
+    await db.insert(userActivities).values({ userId: row[0].requesterId, type: "friendship_started", friendId: userId });
+    await db.insert(userActivities).values({ userId, type: "friendship_started", friendId: row[0].requesterId });
+  }
+}
+
+export async function removeFriend(userId: number, friendId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(friendships).where(
+    or(
+      and(eq(friendships.requesterId, userId), eq(friendships.addresseeId, friendId)),
+      and(eq(friendships.requesterId, friendId), eq(friendships.addresseeId, userId))
+    ) as any
+  );
+  await db.update(users).set({ totalFriends: sql`GREATEST(${users.totalFriends} - 1, 0)` }).where(eq(users.id, userId));
+  await db.update(users).set({ totalFriends: sql`GREATEST(${users.totalFriends} - 1, 0)` }).where(eq(users.id, friendId));
+}
+
+export async function getFriendshipStatus(userId: number, otherId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const row = await db
+    .select()
+    .from(friendships)
+    .where(
+      or(
+        and(eq(friendships.requesterId, userId), eq(friendships.addresseeId, otherId)),
+        and(eq(friendships.requesterId, otherId), eq(friendships.addresseeId, userId))
+      ) as any
+    )
+    .limit(1);
+  return row[0] ?? null;
+}
+
+export async function getFriendIds(userId: number): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.status, "accepted"),
+        or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId)) as any
+      )
+    );
+  return rows.map((r) => (r.requesterId === userId ? r.addresseeId : r.requesterId));
+}
+
+export async function getFriends(userId: number) {
+  const friendIds = await getFriendIds(userId);
+  if (friendIds.length === 0) return [];
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(users).where(
+    sql`${users.id} IN (${sql.join(friendIds.map((id) => sql`${id}`), sql`, `)})`
+  );
+}
+
+export async function getPendingRequests(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(friendships)
+    .where(and(eq(friendships.addresseeId, userId), eq(friendships.status, "pending")));
+  if (rows.length === 0) return [];
+  const requesterIds = rows.map((r) => r.requesterId);
+  const requesterUsers = await db.select().from(users).where(
+    sql`${users.id} IN (${sql.join(requesterIds.map((id) => sql`${id}`), sql`, `)})`
+  );
+  return rows.map((r) => ({
+    ...r,
+    requester: requesterUsers.find((u) => u.id === r.requesterId),
+  }));
+}
+
+export async function getSentRequests(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(friendships).where(
+    and(eq(friendships.requesterId, userId), eq(friendships.status, "pending"))
+  );
+}
+
+// ─── User Search ──────────────────────────────────────────────────────────────
+export async function searchUsers(query: string, excludeId?: number, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions: any[] = [
+    or(
+      like(users.name, `%${query}%`),
+      like(users.username, `%${query}%`),
+      like(users.email, `%${query}%`)
+    ),
+  ];
+  if (excludeId) conditions.push(sql`${users.id} != ${excludeId}`);
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatarUrl: users.avatarUrl,
+      bio: users.bio,
+      city: users.city,
+      totalVideos: users.totalVideos,
+      totalFriends: users.totalFriends,
+    })
+    .from(users)
+    .where(and(...conditions))
+    .limit(limit);
+}
+
+export async function getUserPublicProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatarUrl: users.avatarUrl,
+      coverUrl: users.coverUrl,
+      bio: users.bio,
+      city: users.city,
+      favoriteCuisine: users.favoriteCuisine,
+      instagramHandle: users.instagramHandle,
+      tiktokHandle: users.tiktokHandle,
+      totalVideos: users.totalVideos,
+      totalLikes: users.totalLikes,
+      totalReviews: users.totalReviews,
+      totalRestaurantsVisited: users.totalRestaurantsVisited,
+      totalFriends: users.totalFriends,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return result[0];
+}
+
+// ─── User Activities ──────────────────────────────────────────────────────────
+export async function logActivity(data: {
+  userId: number;
+  type: "video_posted" | "video_approved" | "review_posted" | "restaurant_visited" | "achievement_earned" | "friendship_started";
+  restaurantId?: number;
+  videoId?: number;
+  reviewId?: number;
+  achievementId?: number;
+  friendId?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(userActivities).values(data);
+}
+
+export async function getFriendsFeed(userId: number, limit = 30, offset = 0) {
+  const friendIds = await getFriendIds(userId);
+  if (friendIds.length === 0) return [];
+  const db = await getDb();
+  if (!db) return [];
+
+  const activities = await db
+    .select()
+    .from(userActivities)
+    .where(sql`${userActivities.userId} IN (${sql.join(friendIds.map((id) => sql`${id}`), sql`, `)})`)
+    .orderBy(desc(userActivities.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  if (activities.length === 0) return [];
+
+  // Enrich with user data
+  const actorIds = Array.from(new Set(activities.map((a) => a.userId)));
+  const actorUsers = await db.select({
+    id: users.id, name: users.name, username: users.username, avatarUrl: users.avatarUrl,
+  }).from(users).where(sql`${users.id} IN (${sql.join(actorIds.map((id) => sql`${id}`), sql`, `)})`);
+
+  // Enrich with restaurant data
+  const restaurantIds = Array.from(new Set(activities.filter((a) => a.restaurantId).map((a) => a.restaurantId!)));
+  const activityRestaurants = restaurantIds.length > 0
+    ? await db.select({ id: restaurants.id, name: restaurants.name, slug: restaurants.slug, logoUrl: restaurants.logoUrl, neighborhood: restaurants.neighborhood, averageRating: restaurants.averageRating })
+        .from(restaurants)
+        .where(sql`${restaurants.id} IN (${sql.join(restaurantIds.map((id) => sql`${id}`), sql`, `)})`)
+    : [];
+
+  // Enrich with video data
+  const videoIds = Array.from(new Set(activities.filter((a) => a.videoId).map((a) => a.videoId!)));
+  const activityVideos = videoIds.length > 0
+    ? await db.select({ id: videos.id, title: videos.title, thumbnailUrl: videos.thumbnailUrl, views: videos.views, likes: videos.likes })
+        .from(videos)
+        .where(sql`${videos.id} IN (${sql.join(videoIds.map((id) => sql`${id}`), sql`, `)})`)
+    : [];
+
+  return activities.map((a) => ({
+    ...a,
+    user: actorUsers.find((u) => u.id === a.userId),
+    restaurant: activityRestaurants.find((r) => r.id === a.restaurantId),
+    video: activityVideos.find((v) => v.id === a.videoId),
+  }));
+}
+
+// ─── Restaurant Visits ────────────────────────────────────────────────────────
+export async function recordVisit(userId: number, restaurantId: number, videoId?: number, reviewId?: number) {
+  const db = await getDb();
+  if (!db) return;
+  // Check if already visited
+  const existing = await db
+    .select()
+    .from(restaurantVisits)
+    .where(and(eq(restaurantVisits.userId, userId), eq(restaurantVisits.restaurantId, restaurantId)))
+    .limit(1);
+  if (existing.length === 0) {
+    await db.update(users).set({ totalRestaurantsVisited: sql`${users.totalRestaurantsVisited} + 1` }).where(eq(users.id, userId));
+  }
+  await db.insert(restaurantVisits).values({ userId, restaurantId, videoId, reviewId });
+}
+
+export async function getUserVisitedRestaurants(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const visits = await db
+    .select({ restaurantId: restaurantVisits.restaurantId, visitedAt: restaurantVisits.visitedAt })
+    .from(restaurantVisits)
+    .where(eq(restaurantVisits.userId, userId))
+    .orderBy(desc(restaurantVisits.visitedAt));
+
+  if (visits.length === 0) return [];
+  const uniqueIds = Array.from(new Set(visits.map((v) => v.restaurantId)));
+  const restaurantData = await db
+    .select()
+    .from(restaurants)
+    .where(sql`${restaurants.id} IN (${sql.join(uniqueIds.map((id) => sql`${id}`), sql`, `)})`);
+
+  return uniqueIds.map((id) => ({
+    ...restaurantData.find((r) => r.id === id)!,
+    lastVisit: visits.find((v) => v.restaurantId === id)?.visitedAt,
+  })).filter((r) => r.id);
+}
+
+export async function getFriendsWhoVisited(restaurantId: number, userId: number) {
+  const friendIds = await getFriendIds(userId);
+  if (friendIds.length === 0) return [];
+  const db = await getDb();
+  if (!db) return [];
+  const visits = await db
+    .select({ userId: restaurantVisits.userId, visitedAt: restaurantVisits.visitedAt })
+    .from(restaurantVisits)
+    .where(
+      and(
+        eq(restaurantVisits.restaurantId, restaurantId),
+        sql`${restaurantVisits.userId} IN (${sql.join(friendIds.map((id) => sql`${id}`), sql`, `)})`
+      )
+    )
+    .orderBy(desc(restaurantVisits.visitedAt));
+
+  if (visits.length === 0) return [];
+  const visitorIds = Array.from(new Set(visits.map((v) => v.userId)));
+  const visitorUsers = await db.select({
+    id: users.id, name: users.name, username: users.username, avatarUrl: users.avatarUrl,
+  }).from(users).where(sql`${users.id} IN (${sql.join(visitorIds.map((id) => sql`${id}`), sql`, `)})`);
+
+  return visitorUsers.map((u) => ({
+    ...u,
+    lastVisit: visits.find((v) => v.userId === u.id)?.visitedAt,
+  }));
 }

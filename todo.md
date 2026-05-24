@@ -56,3 +56,17 @@
 - [x] Seed de tags para vídeos existentes (15 vídeos atualizados)
 - [x] Gráfico de distribuição de tags no dashboard do restaurante (barras horizontais + pizza por categoria)
 - [x] Gráfico de tags interativo: clique em barra/fatia/pill filtra vídeos relacionados no painel abaixo
+
+## Fase 9: Rede Social Gastronômica
+- [x] Schema: tabelas friendships, user_activities, restaurant_visits + campos sociais em users
+- [x] Migration e aplicação no banco
+- [x] Backend: router social (searchUsers, getProfile, getMyProfile, updateProfile, uploadAvatar, uploadCover)
+- [x] Backend: sendRequest, respondRequest, removeFriend, listFriends, pendingRequests, friendsFeed
+- [x] Perfil customizável: avatar, foto de capa, bio, cidade, culinária favorita, redes sociais
+- [x] Estatísticas do perfil: total de vídeos, avaliações, restaurantes visitados, amigos
+- [x] Página pública de perfil de usuário (/u/:userId) com vídeos, avaliações e restaurantes
+- [x] Sistema de amizades: busca de usuários, envio/aceite/recusa de solicitações
+- [x] Feed social de amigos: atividades recentes (novo vídeo, nova avaliação, restaurante visitado)
+- [x] Seção "Restaurantes visitados" no perfil do usuário
+- [x] GlobalNav com navbar superior + bottom nav mobile + menu dropdown do usuário
+- [x] Rotas /profile, /friends, /social, /u/:userId integradas no App.tsx
