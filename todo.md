@@ -70,3 +70,16 @@
 - [x] Seção "Restaurantes visitados" no perfil do usuário
 - [x] GlobalNav com navbar superior + bottom nav mobile + menu dropdown do usuário
 - [x] Rotas /profile, /friends, /social, /u/:userId integradas no App.tsx
+
+## Fase 10: Landing Page Imersiva (TripAdvisor-style)
+- [x] Hero com vídeo de fundo full-width e barra de busca centralizada
+- [x] Quick links de culinária no hero (Hambúrguer, Sushi, Pizza, Churrasco, Vegano)
+- [x] Stats bar com ícones e métricas da plataforma
+- [x] Seção "Escolhas da Semana" com carousel horizontal e ranking numerado
+- [x] Seção UGC em destaque: vídeo grande + grid 2x2 de vídeos menores
+- [x] Grid de categorias de culinária com emoji e cores por tipo
+- [x] Grid de restaurantes em destaque com layout horizontal (thumbnail + info)
+- [x] Seção de bairros gastronômicos de SP com cards coloridos
+- [x] Seção "Como Funciona" com 3 passos numerados
+- [x] CTA para restaurantes com layout assimétrico
+- [x] Footer completo com 4 colunas e links organizados
