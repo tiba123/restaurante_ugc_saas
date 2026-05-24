@@ -50,3 +50,7 @@
 - [x] Testes unitários (vitest) — 13 testes passando
 - [x] Página de cadastro de restaurante
 - [x] Checkpoint final
+
+## Fase 8: Features Adicionais
+- [x] Sistema de tags automáticas via IA (LLM) nos vídeos do feed com badges coloridos por categoria
+- [x] Seed de tags para vídeos existentes (15 vídeos atualizados)

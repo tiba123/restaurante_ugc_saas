@@ -37,8 +37,10 @@ import {
   updateVideoStatus,
   upsertRestaurantAccount,
   getAllReviews,
+  updateVideoTags,
 } from "./db";
 import { storagePut } from "./storage";
+import { generateAutoTags, serializeTags, deserializeTags, getTagMeta } from "./autoTags";
 
 // ─── Auth Router ──────────────────────────────────────────────────────────────
 const authRouter = router({
@@ -107,6 +109,17 @@ const videosRouter = router({
         thumbnailKey = tKey;
       }
 
+      // Generate auto tags via LLM
+      const restaurant = await getRestaurantById(input.restaurantId);
+      const autoTags = await generateAutoTags({
+        title: input.title,
+        description: input.description,
+        rating: input.rating,
+        restaurantName: restaurant?.name,
+        cuisine: restaurant?.cuisine,
+      });
+      const serializedTags = serializeTags(autoTags);
+
       await createVideo({
         userId,
         restaurantId: input.restaurantId,
@@ -117,12 +130,12 @@ const videosRouter = router({
         thumbnailUrl,
         thumbnailKey,
         rating: input.rating,
-        tags: input.tags as any,
+        tags: serializedTags as any,
         status: "pending",
         isPublic: false,
       });
 
-      return { success: true, message: "Vídeo enviado para aprovação do restaurante." };
+      return { success: true, message: "Vídeo enviado para aprovação do restaurante.", autoTags };
     }),
 
   like: protectedProcedure
@@ -372,6 +385,22 @@ const restaurantDashboardRouter = router({
       await updateVideoStatus(input.videoId, "approved", { approvedBy: ctx.user.id });
       // Update restaurant video count
       await updateRestaurant(restaurant.id, { totalVideos: restaurant.totalVideos + 1 });
+      // Re-generate auto tags on approval if video has no tags or only manual tags
+      const existingTags = Array.isArray(video.tags) ? video.tags : [];
+      if (existingTags.length === 0) {
+        try {
+          const autoTags = await generateAutoTags({
+            title: video.title,
+            description: video.description,
+            rating: video.rating,
+            restaurantName: restaurant.name,
+            cuisine: restaurant.cuisine,
+          });
+          await updateVideoTags(input.videoId, serializeTags(autoTags));
+        } catch (e) {
+          console.warn("[AutoTags] Failed to generate tags on approval:", e);
+        }
+      }
       return { success: true };
     }),
 

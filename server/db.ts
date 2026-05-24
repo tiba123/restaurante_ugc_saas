@@ -261,6 +261,12 @@ export async function updateVideoStatus(
   await db.update(videos).set(updateData).where(eq(videos.id, id));
 }
 
+export async function updateVideoTags(id: number, tags: string[]) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(videos).set({ tags } as any).where(eq(videos.id, id));
+}
+
 export async function incrementVideoViews(id: number) {
   const db = await getDb();
   if (!db) return;

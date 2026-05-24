@@ -88,7 +88,28 @@ function VideoCard({
     setProgress((el.currentTime / el.duration) * 100);
   };
 
-  const tags = Array.isArray(video.tags) ? (video.tags as string[]) : [];
+  const rawTags = Array.isArray(video.tags) ? (video.tags as string[]) : [];
+
+  // Parse serialized tags: "emoji Label|category" or plain string
+  const tags = rawTags.map((item) => {
+    if (typeof item !== "string") return { label: String(item), category: "food", emoji: "🍽️" };
+    const pipeIdx = item.lastIndexOf("|");
+    if (pipeIdx === -1) return { label: item.replace(/^[\s\S]{1,2}\s/, "").trim() || item, category: "food", emoji: "🍽️" };
+    const labelWithEmoji = item.slice(0, pipeIdx);
+    const category = item.slice(pipeIdx + 1);
+    const spaceIdx = labelWithEmoji.indexOf(" ");
+    const emoji = spaceIdx > -1 ? labelWithEmoji.slice(0, spaceIdx) : "🍽️";
+    const label = spaceIdx > -1 ? labelWithEmoji.slice(spaceIdx + 1) : labelWithEmoji;
+    return { label, category, emoji };
+  });
+
+  const TAG_COLORS: Record<string, { bg: string; text: string }> = {
+    food:       { bg: "rgba(224,122,95,0.85)",  text: "#fff" },
+    service:    { bg: "rgba(61,64,91,0.85)",    text: "#fff" },
+    ambiance:   { bg: "rgba(129,178,154,0.85)", text: "#fff" },
+    value:      { bg: "rgba(180,140,60,0.85)",  text: "#fff" },
+    experience: { bg: "rgba(156,107,152,0.85)", text: "#fff" },
+  };
 
   return (
     <div className="relative w-full h-full bg-black flex items-center justify-center">
@@ -173,12 +194,20 @@ function VideoCard({
         )}
 
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {tags.slice(0, 3).map((tag) => (
-              <span key={tag} className="px-2 py-0.5 bg-white/15 backdrop-blur-sm text-white text-xs rounded-full">
-                #{tag}
-              </span>
-            ))}
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {tags.slice(0, 4).map((tag, i) => {
+              const colors = TAG_COLORS[tag.category] ?? TAG_COLORS.food;
+              return (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full backdrop-blur-md"
+                  style={{ backgroundColor: colors.bg, color: colors.text }}
+                >
+                  <span>{tag.emoji}</span>
+                  <span>{tag.label}</span>
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
