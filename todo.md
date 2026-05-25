@@ -85,11 +85,11 @@
 - [x] Footer completo com 4 colunas e links organizados
 
 ## Fase 11: Gamificação — Missões e Recompensas
-- [ ] Schema: tabelas missions, user_missions, rewards, user_rewards
-- [ ] Migration e aplicação no banco
-- [ ] Backend: router missions (listMissions, acceptMission, completeMission, claimReward, myProgress)
-- [ ] Página /missions com estilo gamer: missão principal, missões secundárias, barra de progresso
-- [ ] Cards de missão com pontuação, status (bloqueada/ativa/concluída) e animações
-- [ ] Sistema de recompensas com tiers (10pts, 30pts, 60pts) e badges visuais
-- [ ] Integração de pontos ao completar ações (upload de vídeo, avaliação, foto, responder perguntas)
-- [ ] Rota /missions integrada no App.tsx e navbar
+- [x] Schema: tabelas missions, mission_sessions, mission_progress, rewards, user_rewards, user_credits
+- [x] Migration e aplicação no banco
+- [x] Backend: missionsRouterDef (list, rewards, accept, activeSession, complete, myRewards)
+- [x] Página /missions com estilo gamer: missão principal, missões secundárias, barra de progresso
+- [x] Cards de missão com pontuação, status (bloqueada/ativa/concluída) e animações
+- [x] Sistema de recompensas com tiers (10pts, 30pts, 60pts) e badges visuais + cupons
+- [x] Seed de 4 missões e 3 recompensas no banco
+- [x] Rota /missions integrada no App.tsx com ícone Target na navbar
