@@ -43,12 +43,27 @@ export default function VideoUpload() {
     Array.isArray(restaurantsData) ? restaurantsData : [];
   const selectedRestaurant = restaurants.find((r) => r.id === selectedRestaurantId);
 
+  // Contexto de missão (passado via URL params ou estado global)
+  const [missionContext] = useState<{ sessionId?: number; missionId?: number }>(() => {
+    try {
+      const stored = sessionStorage.getItem("tastee_mission_context");
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+  });
+  const [missionResult, setMissionResult] = useState<{ pointsEarned: number; totalPoints: number } | null>(null);
+
   // Upload mutation
   const uploadMutation = trpc.videos.upload.useMutation({
     onSuccess: (data) => {
       setUploadedVideoId(data.videoId);
+      if (data.missionCompleted) {
+        setMissionResult(data.missionCompleted);
+        toast.success(`+${data.missionCompleted.pointsEarned} pontos ganhos! Missão de vídeo concluída!`);
+        sessionStorage.removeItem("tastee_mission_context");
+      } else {
+        toast.success("Vídeo enviado com sucesso! Aguardando aprovação do restaurante.");
+      }
       setStep("done");
-      toast.success("Vídeo enviado com sucesso! Aguardando aprovação do restaurante.");
     },
     onError: (err) => {
       toast.error(err.message || "Erro ao enviar vídeo. Tente novamente.");
@@ -101,6 +116,9 @@ export default function VideoUpload() {
         videoMimeType: videoFile.type,
         videoFileName: videoFile.name,
         videoSize: videoFile.size,
+        // Integração com missões
+        sessionId: missionContext.sessionId,
+        missionId: missionContext.missionId,
       });
 
       clearInterval(progressInterval);
@@ -458,15 +476,27 @@ export default function VideoUpload() {
           </p>
         </div>
 
-        <div className="w-full max-w-sm p-5 rounded-3xl bg-amber-500/10 border border-amber-500/20">
-          <div className="flex items-center gap-3 mb-2">
-            <Sparkles className="w-5 h-5 text-amber-400" />
-            <span className="font-bold text-amber-400">+30 pontos ganhos!</span>
+        {missionResult ? (
+          <div className="w-full max-w-sm p-5 rounded-3xl bg-amber-500/10 border border-amber-500/20">
+            <div className="flex items-center gap-3 mb-2">
+              <Sparkles className="w-5 h-5 text-amber-400" />
+              <span className="font-bold text-amber-400">+{missionResult.pointsEarned} pontos ganhos!</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Missão de vídeo concluída! Total acumulado: <strong>{missionResult.totalPoints} pts</strong>. Continue as outras missões para ganhar mais recompensas!
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Você completou a missão "Grave um Vídeo Provando". Continue completando as outras missões para ganhar mais recompensas!
-          </p>
-        </div>
+        ) : (
+          <div className="w-full max-w-sm p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/20">
+            <div className="flex items-center gap-3 mb-2">
+              <Sparkles className="w-5 h-5 text-emerald-400" />
+              <span className="font-bold text-emerald-400">Vídeo em análise</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Seu vídeo será publicado após aprovação do restaurante. Inicie uma missão para ganhar pontos e recompensas!
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-col gap-3 w-full max-w-sm">
           <Link href="/missions">

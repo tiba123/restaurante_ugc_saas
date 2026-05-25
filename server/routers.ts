@@ -110,6 +110,9 @@ const videosRouter = router({
         videoFileName: z.string().optional(),
         videoSize: z.number().optional(),
         thumbnailBase64: z.string().optional(),
+        // Integração com missões: se fornecidos, completa a missão de vídeo automaticamente
+        sessionId: z.number().optional(),
+        missionId: z.number().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -163,7 +166,51 @@ const videosRouter = router({
         await recordVisit(userId, input.restaurantId);
       } catch (e) { console.warn("[Activity] Failed to log upload activity:", e); }
 
-      return { success: true, videoId: newVideo?.id ?? 0, message: "Vídeo enviado para aprovação do restaurante.", autoTags };
+      // Auto-complete mission "video" se houver sessão ativa para este restaurante
+      let missionCompleted: { pointsEarned: number; totalPoints: number } | null = null;
+      if (input.sessionId && input.missionId) {
+        try {
+          const db2 = await getDb();
+          if (db2) {
+            const { missionProgress, missionSessions, missions, rewards, userRewards } = await import("../drizzle/schema");
+            const { and, eq: eqOp, lte } = await import("drizzle-orm");
+            const [mission] = await db2.select().from(missions).where(eqOp(missions.id, input.missionId)).limit(1);
+            if (mission) {
+              // Verificar idempotência: não creditar pontos se missão já foi concluída
+              const [existing] = await db2.select().from(missionProgress)
+                .where(and(eqOp(missionProgress.sessionId, input.sessionId), eqOp(missionProgress.missionId, input.missionId)))
+                .limit(1);
+              if (existing?.status === "completed") {
+                missionCompleted = null; // já concluída, não creditar novamente
+              } else {
+              await db2.update(missionProgress)
+                .set({ status: "completed", pointsEarned: mission.points, completedAt: new Date(), data: { videoId: newVideo?.id } })
+                .where(and(eqOp(missionProgress.sessionId, input.sessionId), eqOp(missionProgress.missionId, input.missionId)));
+              const [session] = await db2.select().from(missionSessions).where(eqOp(missionSessions.id, input.sessionId)).limit(1);
+              const newTotal = (session?.totalPoints ?? 0) + mission.points;
+              await db2.update(missionSessions).set({ totalPoints: newTotal }).where(eqOp(missionSessions.id, input.sessionId));
+              // Verificar recompensas desbloqueadas
+              const unlocked = await db2.select().from(rewards).where(lte(rewards.pointsRequired, newTotal));
+              for (const reward of unlocked) {
+                const existing = await db2.select().from(userRewards)
+                  .where(and(eqOp(userRewards.userId, userId), eqOp(userRewards.rewardId, reward.id), eqOp(userRewards.sessionId, input.sessionId)))
+                  .limit(1);
+                if (existing.length === 0) {
+                  const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+                  await db2.insert(userRewards).values({
+                    userId, rewardId: reward.id, sessionId: input.sessionId,
+                    couponCode: code, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                  });
+                }
+              }
+              missionCompleted = { pointsEarned: mission.points, totalPoints: newTotal };
+              } // end else (not already completed)
+            }
+          }
+        } catch (e) { console.warn("[Missions] Failed to complete mission on upload:", e); }
+      }
+
+      return { success: true, videoId: newVideo?.id ?? 0, message: "Vídeo enviado para aprovação do restaurante.", autoTags, missionCompleted };
     }),
 
   like: protectedProcedure

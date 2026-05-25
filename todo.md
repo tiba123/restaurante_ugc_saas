@@ -106,6 +106,7 @@
 - [x] Botão "Gravar" com ícone PlusCircle na navbar (desktop + mobile)
 - [x] Integração com sistema de missões: +30pts ao completar upload
 
-## Fase 12b: Melhorias de Upload (próxima iteração)
-- [ ] Integrar fluxo de upload ao missionsRouter para registrar conclusão e creditar pontos persistidos
-- [ ] Melhorar feedback de progresso de upload com indicadores mais precisos
+## Fase 12b: Melhorias de Upload
+- [x] Integrar fluxo de upload ao missionsRouter: sessionId/missionId passados ao backend, pontos creditados persistidos no banco
+- [x] Tela de sucesso exibe pontos reais ganhos quando missão está ativa (via sessionStorage)
+- [x] Contexto de missão armazenado em sessionStorage para persistência entre navegações
