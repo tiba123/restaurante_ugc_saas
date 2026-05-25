@@ -289,3 +289,107 @@ export const platformStats = mysqlTable("platform_stats", {
   newVideos: int("newVideos").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+// ─── Missions (gamification) ──────────────────────────────────────────────────
+export const missions = mysqlTable("missions", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  instructions: text("instructions"),
+  type: mysqlEnum("type", [
+    "photo",       // tirar foto do prato
+    "video",       // gravar vídeo provando a comida
+    "review",      // deixar avaliação
+    "questions",   // responder perguntas
+    "checkin",     // fazer check-in no restaurante
+    "share",       // compartilhar nas redes sociais
+  ]).notNull(),
+  points: int("points").default(10).notNull(),
+  isOptional: boolean("isOptional").default(false).notNull(),
+  order: int("order").default(0).notNull(),
+  iconEmoji: varchar("iconEmoji", { length: 10 }).default("🎯"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Mission = typeof missions.$inferSelect;
+
+// ─── Mission Sessions (user accepts a mission set at a restaurant) ────────────
+export const missionSessions = mysqlTable("mission_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  restaurantId: int("restaurantId").notNull(),
+  status: mysqlEnum("status", ["active", "completed", "expired", "abandoned"])
+    .default("active")
+    .notNull(),
+  totalPoints: int("totalPoints").default(0).notNull(),
+  acceptedAt: timestamp("acceptedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  expiresAt: timestamp("expiresAt"),
+});
+
+export type MissionSession = typeof missionSessions.$inferSelect;
+
+// ─── Mission Progress (per mission within a session) ─────────────────────────
+export const missionProgress = mysqlTable("mission_progress", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull(),
+  missionId: int("missionId").notNull(),
+  userId: int("userId").notNull(),
+  status: mysqlEnum("status", ["locked", "available", "in_progress", "completed"])
+    .default("available")
+    .notNull(),
+  pointsEarned: int("pointsEarned").default(0).notNull(),
+  completedAt: timestamp("completedAt"),
+  data: json("data"), // answers, photo url, video url, etc.
+});
+
+export type MissionProgressRow = typeof missionProgress.$inferSelect;
+
+// ─── Rewards (recompensas por pontuação) ─────────────────────────────────────
+export const rewards = mysqlTable("rewards", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  type: mysqlEnum("type", ["free_item", "discount", "credits", "priority"])
+    .default("discount")
+    .notNull(),
+  pointsRequired: int("pointsRequired").notNull(),
+  discountPercent: int("discountPercent"),
+  freeItemDescription: varchar("freeItemDescription", { length: 255 }),
+  creditsValue: decimal("creditsValue", { precision: 10, scale: 2 }),
+  iconEmoji: varchar("iconEmoji", { length: 10 }).default("🎁"),
+  badgeColor: varchar("badgeColor", { length: 50 }).default("amber"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Reward = typeof rewards.$inferSelect;
+
+// ─── User Rewards (recompensas resgatadas) ────────────────────────────────────
+export const userRewards = mysqlTable("user_rewards", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  rewardId: int("rewardId").notNull(),
+  sessionId: int("sessionId"),
+  restaurantId: int("restaurantId"),
+  status: mysqlEnum("status", ["available", "used", "expired"]).default("available").notNull(),
+  couponCode: varchar("couponCode", { length: 32 }),
+  claimedAt: timestamp("claimedAt").defaultNow().notNull(),
+  usedAt: timestamp("usedAt"),
+  expiresAt: timestamp("expiresAt"),
+});
+
+export type UserReward = typeof userRewards.$inferSelect;
+
+// ─── User Credits (saldo de créditos) ────────────────────────────────────────
+export const userCredits = mysqlTable("user_credits", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  balance: decimal("balance", { precision: 10, scale: 2 }).default("0.00").notNull(),
+  totalEarned: decimal("totalEarned", { precision: 10, scale: 2 }).default("0.00").notNull(),
+  totalSpent: decimal("totalSpent", { precision: 10, scale: 2 }).default("0.00").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserCredit = typeof userCredits.$inferSelect;

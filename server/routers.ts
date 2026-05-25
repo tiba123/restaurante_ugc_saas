@@ -4,6 +4,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { getDb } from "./db";
 import {
   addVideoComment,
   createRestaurant,
@@ -830,6 +831,131 @@ const socialRouter = router({
   myVisitedRestaurants: protectedProcedure.query(async ({ ctx }) => getUserVisitedRestaurants(ctx.user.id)),
 });
 
+
+// ─── Missions Router (Gamification) ──────────────────────────────────────────
+const missionsRouterDef = router({
+  list: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const { missions } = await import("../drizzle/schema");
+    const { asc } = await import("drizzle-orm");
+    return db.select().from(missions).orderBy(asc(missions.order));
+  }),
+
+  rewards: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const { rewards } = await import("../drizzle/schema");
+    const { asc } = await import("drizzle-orm");
+    return db.select().from(rewards).orderBy(asc(rewards.pointsRequired));
+  }),
+
+  accept: protectedProcedure
+    .input(z.object({ restaurantId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const { missionSessions, missionProgress, missions } = await import("../drizzle/schema");
+      const { asc } = await import("drizzle-orm");
+      const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
+      const [result] = await db.insert(missionSessions).values({
+        userId: ctx.user.id,
+        restaurantId: input.restaurantId,
+        status: "active",
+        totalPoints: 0,
+        expiresAt,
+      });
+      const sessionId = (result as any).insertId as number;
+      const allMissions = await db.select().from(missions).orderBy(asc(missions.order));
+      if (allMissions.length > 0) {
+        await db.insert(missionProgress).values(
+          allMissions.map((m) => ({
+            sessionId,
+            missionId: m.id,
+            userId: ctx.user.id,
+            status: "available" as const,
+            pointsEarned: 0,
+          }))
+        );
+      }
+      return { sessionId, expiresAt };
+    }),
+
+  activeSession: protectedProcedure
+    .input(z.object({ restaurantId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const { missionSessions, missionProgress, missions } = await import("../drizzle/schema");
+      const { and, eq: eqOp, desc } = await import("drizzle-orm");
+      const [session] = await db
+        .select()
+        .from(missionSessions)
+        .where(and(eqOp(missionSessions.userId, ctx.user.id), eqOp(missionSessions.restaurantId, input.restaurantId), eqOp(missionSessions.status, "active")))
+        .orderBy(desc(missionSessions.acceptedAt))
+        .limit(1);
+      if (!session) return null;
+      const progress = await db
+        .select({ progress: missionProgress, mission: missions })
+        .from(missionProgress)
+        .innerJoin(missions, eqOp(missionProgress.missionId, missions.id))
+        .where(eqOp(missionProgress.sessionId, session.id));
+      return { session, progress };
+    }),
+
+  complete: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+      missionId: z.number(),
+      data: z.record(z.string(), z.any()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const { missionProgress, missionSessions, missions, rewards, userRewards } = await import("../drizzle/schema");
+      const { and, eq: eqOp, lte } = await import("drizzle-orm");
+      const [mission] = await db.select().from(missions).where(eqOp(missions.id, input.missionId)).limit(1);
+      if (!mission) throw new Error("Mission not found");
+      await db
+        .update(missionProgress)
+        .set({ status: "completed", pointsEarned: mission.points, completedAt: new Date(), data: input.data ?? null })
+        .where(and(eqOp(missionProgress.sessionId, input.sessionId), eqOp(missionProgress.missionId, input.missionId)));
+      const [session] = await db.select().from(missionSessions).where(eqOp(missionSessions.id, input.sessionId)).limit(1);
+      const newTotal = (session?.totalPoints ?? 0) + mission.points;
+      await db.update(missionSessions).set({ totalPoints: newTotal }).where(eqOp(missionSessions.id, input.sessionId));
+      const unlockedRewards = await db.select().from(rewards).where(lte(rewards.pointsRequired, newTotal));
+      const newlyUnlocked: typeof unlockedRewards = [];
+      for (const reward of unlockedRewards) {
+        const existing = await db.select().from(userRewards)
+          .where(and(eqOp(userRewards.userId, ctx.user.id), eqOp(userRewards.rewardId, reward.id), eqOp(userRewards.sessionId, input.sessionId)))
+          .limit(1);
+        if (existing.length === 0) {
+          const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+          await db.insert(userRewards).values({
+            userId: ctx.user.id,
+            rewardId: reward.id,
+            sessionId: input.sessionId,
+            couponCode: code,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          });
+          newlyUnlocked.push(reward);
+        }
+      }
+      return { pointsEarned: mission.points, totalPoints: newTotal, newlyUnlocked };
+    }),
+
+  myRewards: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const { userRewards, rewards } = await import("../drizzle/schema");
+    const { eq: eqOp } = await import("drizzle-orm");
+    return db.select({ userReward: userRewards, reward: rewards })
+      .from(userRewards)
+      .innerJoin(rewards, eqOp(userRewards.rewardId, rewards.id))
+      .where(eqOp(userRewards.userId, ctx.user.id));
+  }),
+});
+
 // ─── App Router ───────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
@@ -841,6 +967,7 @@ export const appRouter = router({
   restaurantDashboard: restaurantDashboardRouter,
   admin: adminRouter,
   social: socialRouter,
+  missions: missionsRouterDef,
 });
 
 export type AppRouter = typeof appRouter;

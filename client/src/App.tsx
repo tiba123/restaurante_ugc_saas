@@ -16,12 +16,13 @@ import UserProfilePage from "./pages/UserProfile";
 import FriendsPage from "./pages/Friends";
 import SocialFeedPage from "./pages/SocialFeed";
 import PublicUserProfilePage from "./pages/PublicUserProfile";
+import MissionsPage from "./pages/Missions";
 import { useAuth } from "./_core/hooks/useAuth";
 import { getLoginUrl } from "./const";
 import { trpc } from "./lib/trpc";
 import {
   Home as HomeIcon, Play, Search, Users, User,
-  LayoutDashboard, Shield, UtensilsCrossed, Bell, LogOut
+  LayoutDashboard, Shield, UtensilsCrossed, Bell, LogOut, Target
 } from "lucide-react";
 import { useState } from "react";
 
@@ -38,6 +39,7 @@ function GlobalNav() {
   const navItems = [
     { href: "/feed", icon: Play, label: "Feed" },
     { href: "/explore", icon: Search, label: "Explorar" },
+    { href: "/missions", icon: Target, label: "Missões" },
     { href: "/social", icon: Users, label: "Amigos" },
     { href: "/profile", icon: User, label: "Perfil" },
   ];
@@ -166,6 +168,9 @@ function Router() {
       {/* Restaurant routes */}
       <Route path="/restaurant/register" component={RestaurantRegisterPage} />
       <Route path="/restaurant/dashboard" component={RestaurantDashboardPage} />
+
+      {/* Missions / Gamification */}
+      <Route path="/missions" component={MissionsPage} />
 
       {/* Admin routes */}
       <Route path="/admin" component={AdminDashboardPage} />
