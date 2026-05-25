@@ -103,15 +103,22 @@ const videosRouter = router({
         description: z.string().optional(),
         rating: z.number().min(1).max(5).optional(),
         tags: z.array(z.string()).optional(),
-        videoBase64: z.string(),
-        videoMimeType: z.string().default("video/mp4"),
+        // Aceita videoBase64 (legado) ou videoData (novo — câmera nativa)
+        videoBase64: z.string().optional(),
+        videoData: z.string().optional(),
+        videoMimeType: z.string().default("video/webm"),
+        videoFileName: z.string().optional(),
+        videoSize: z.number().optional(),
         thumbnailBase64: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
-      const videoBuffer = Buffer.from(input.videoBase64, "base64");
-      const videoKey = `videos/${userId}/${Date.now()}.mp4`;
+      const rawBase64 = input.videoData ?? input.videoBase64;
+      if (!rawBase64) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum vídeo enviado." });
+      const videoBuffer = Buffer.from(rawBase64, "base64");
+      const ext = input.videoMimeType.includes("mp4") ? "mp4" : "webm";
+      const videoKey = `videos/${userId}/${Date.now()}.${ext}`;
       const { url: videoUrl } = await storagePut(videoKey, videoBuffer, input.videoMimeType);
 
       let thumbnailUrl: string | undefined;
@@ -156,7 +163,7 @@ const videosRouter = router({
         await recordVisit(userId, input.restaurantId);
       } catch (e) { console.warn("[Activity] Failed to log upload activity:", e); }
 
-      return { success: true, message: "Vídeo enviado para aprovação do restaurante.", autoTags };
+      return { success: true, videoId: newVideo?.id ?? 0, message: "Vídeo enviado para aprovação do restaurante.", autoTags };
     }),
 
   like: protectedProcedure

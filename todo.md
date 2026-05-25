@@ -93,3 +93,19 @@
 - [x] Sistema de recompensas com tiers (10pts, 30pts, 60pts) e badges visuais + cupons
 - [x] Seed de 4 missões e 3 recompensas no banco
 - [x] Rota /missions integrada no App.tsx com ícone Target na navbar
+
+## Fase 12: Câmera Nativa e Upload Automático
+- [x] Componente VideoCamera.tsx com MediaRecorder API (acesso à câmera/microfone)
+- [x] Preview em tempo real via getUserMedia com seleção de câmera frontal/traseira
+- [x] Gravação com timer visual, limite de 60s e botão stop
+- [x] Preview do vídeo gravado antes de confirmar o upload
+- [x] Upload automático via base64 para o storage da plataforma com barra de progresso
+- [x] Página /upload com fluxo: escolher método → gravar/selecionar → detalhes → upload → sucesso
+- [x] Endpoint backend atualizado para aceitar videoData (câmera nativa) e videoBase64 (legado)
+- [x] Fallback para seleção de arquivo quando câmera não está disponível
+- [x] Botão "Gravar" com ícone PlusCircle na navbar (desktop + mobile)
+- [x] Integração com sistema de missões: +30pts ao completar upload
+
+## Fase 12b: Melhorias de Upload (próxima iteração)
+- [ ] Integrar fluxo de upload ao missionsRouter para registrar conclusão e creditar pontos persistidos
+- [ ] Melhorar feedback de progresso de upload com indicadores mais precisos
