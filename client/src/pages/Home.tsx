@@ -145,19 +145,14 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* ─── Hero com vídeo de fundo ─────────────────────────────────────── */}
+      {/* ─── Hero com imagem de fundo ─────────────────────────────────────── */}
       <section className="relative h-[85vh] min-h-[560px] flex items-center justify-center overflow-hidden">
-        {/* Vídeo de fundo */}
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
+        {/* Imagem de fundo premium de gastronomia */}
+        <img
+          src="/manus-storage/hero_food_a65c8935.jpg"
+          alt="Fine dining experience"
           className="absolute inset-0 w-full h-full object-cover"
-          poster="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1600&q=80"
-        >
-          <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4" />
-        </video>
+        />
 
         {/* Overlay gradiente */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
