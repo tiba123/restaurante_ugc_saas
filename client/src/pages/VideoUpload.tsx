@@ -6,7 +6,8 @@ import { VideoCamera } from "@/components/VideoCamera";
 import { toast } from "sonner";
 import {
   Video, Camera, Upload, CheckCircle2, ArrowLeft,
-  MapPin, Star, ChevronDown, Loader2, X, Play, Sparkles
+  MapPin, Star, ChevronDown, Loader2, X, Play, Sparkles,
+  Target, Zap
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
@@ -32,6 +33,24 @@ export default function VideoUpload() {
   // Busca de restaurantes
   const [restaurantSearch, setRestaurantSearch] = useState("");
   const [showRestaurantList, setShowRestaurantList] = useState(false);
+
+  // Pré-selecionar restaurante via sessionStorage (vindo do perfil do restaurante)
+  const [missionRestaurantName, setMissionRestaurantName] = useState<string | null>(null);
+  const [isMissionMode] = useState<boolean>(() => {
+    try {
+      const stored = sessionStorage.getItem("mission_restaurant");
+      if (stored) {
+        const parsed = JSON.parse(stored) as { id: number; name: string; slug: string };
+        // Pré-preencher o restaurante selecionado
+        setTimeout(() => {
+          setSelectedRestaurantId(parsed.id);
+          setMissionRestaurantName(parsed.name);
+        }, 0);
+        return true;
+      }
+    } catch { /* ignore */ }
+    return false;
+  });
 
   const { data: restaurantsData } = trpc.restaurants.list.useQuery({
     search: restaurantSearch,
@@ -164,13 +183,36 @@ export default function VideoUpload() {
         </div>
 
         <div className="container py-10 max-w-lg mx-auto">
+
+          {/* Banner de missão ativa */}
+          {isMissionMode && missionRestaurantName && (
+            <div
+              className="mb-6 p-4 rounded-2xl flex items-center gap-3"
+              style={{ background: "linear-gradient(135deg, rgba(232,93,38,0.12) 0%, rgba(245,158,11,0.12) 100%)", border: "1.5px solid rgba(232,93,38,0.3)" }}
+            >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #e85d26, #f59e0b)" }}>
+                <Target className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-orange-500 uppercase tracking-wide mb-0.5">Missão Ativa</p>
+                <p className="text-sm font-bold text-foreground truncate">{missionRestaurantName}</p>
+                <p className="text-xs text-muted-foreground">Restaurante pré-selecionado • +30 pts ao concluir</p>
+              </div>
+              <Zap className="w-5 h-5 text-amber-500 shrink-0" />
+            </div>
+          )}
+
           <div className="text-center mb-10">
             <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center mx-auto mb-4">
               <Video className="w-10 h-10 text-primary" />
             </div>
-            <h2 className="font-display text-2xl font-bold mb-2">Compartilhe sua experiência</h2>
+            <h2 className="font-display text-2xl font-bold mb-2">
+              {isMissionMode ? "Grave sua missão" : "Compartilhe sua experiência"}
+            </h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Grave um vídeo autêntico da sua visita e ganhe recompensas exclusivas
+              {isMissionMode
+                ? "Grave um vídeo provando a comida e ganhe pontos e recompensas!"
+                : "Grave um vídeo autêntico da sua visita e ganhe recompensas exclusivas"}
             </p>
           </div>
 
@@ -298,6 +340,19 @@ export default function VideoUpload() {
               >
                 <X className="w-4 h-4" />
               </button>
+            </div>
+          )}
+
+          {/* Banner de missão ativa nos detalhes */}
+          {isMissionMode && missionRestaurantName && (
+            <div
+              className="p-3 rounded-2xl flex items-center gap-3"
+              style={{ background: "linear-gradient(135deg, rgba(232,93,38,0.10) 0%, rgba(245,158,11,0.10) 100%)", border: "1.5px solid rgba(232,93,38,0.25)" }}
+            >
+              <Target className="w-4 h-4 text-orange-500 shrink-0" />
+              <p className="text-xs text-orange-600 font-medium">
+                Missão ativa em <strong>{missionRestaurantName}</strong> — restaurante pré-selecionado abaixo
+              </p>
             </div>
           )}
 

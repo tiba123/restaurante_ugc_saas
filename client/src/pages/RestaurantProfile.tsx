@@ -4,9 +4,9 @@ import { trpc } from "@/lib/trpc";
 import {
   Star, MapPin, Phone, Globe, Instagram, Clock, Video,
   Users, Eye, ChevronLeft, Play, Shield, MessageSquare,
-  ThumbsUp, Award
+  ThumbsUp, Award, Target, Zap
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link, useParams } from "wouter";
 import { toast } from "sonner";
 
@@ -41,6 +41,17 @@ export default function RestaurantProfilePage() {
   const utils = trpc.useUtils();
 
   const { data, isLoading } = trpc.restaurants.bySlug.useQuery({ slug: slug || "" }, { enabled: !!slug });
+
+  const handleStartMission = useCallback(() => {
+    if (!data) return;
+    // Salva contexto da missão no sessionStorage para o VideoUpload pré-selecionar o restaurante
+    sessionStorage.setItem("mission_restaurant", JSON.stringify({
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+    }));
+    window.location.href = "/upload?mission=1";
+  }, [data]);
 
   const createReview = trpc.reviews.create.useMutation({
     onSuccess: () => {
@@ -196,16 +207,47 @@ export default function RestaurantProfilePage() {
             </div>
           </div>
           <div className="flex flex-col gap-3">
+            {/* Botão principal: Iniciar Missão */}
+            {isAuthenticated ? (
+              <button
+                onClick={handleStartMission}
+                className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 relative overflow-hidden group"
+                style={{
+                  background: "linear-gradient(135deg, #e85d26 0%, #f59e0b 100%)",
+                  color: "#fff",
+                  boxShadow: "0 4px 20px rgba(232,93,38,0.35)",
+                }}
+              >
+                <span className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors" />
+                <Target className="w-4 h-4" />
+                <span>Iniciar Missão aqui</span>
+                <Zap className="w-3.5 h-3.5 opacity-80" />
+              </button>
+            ) : (
+              <a
+                href={getLoginUrl()}
+                className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+                style={{
+                  background: "linear-gradient(135deg, #e85d26 0%, #f59e0b 100%)",
+                  color: "#fff",
+                  boxShadow: "0 4px 20px rgba(232,93,38,0.35)",
+                }}
+              >
+                <Target className="w-4 h-4" /> Entrar para Iniciar Missão
+              </a>
+            )}
+
+            {/* Botão secundário: Avaliar */}
             {isAuthenticated ? (
               <button
                 onClick={() => setShowReviewForm(!showReviewForm)}
-                className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-medium text-sm flex items-center justify-center gap-2"
+                className="w-full py-3 bg-card border border-border text-foreground rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-muted transition-colors"
               >
-                <Star className="w-4 h-4" /> Avaliar Restaurante
+                <Star className="w-4 h-4 text-yellow-500" /> Avaliar Restaurante
               </button>
             ) : (
-              <a href={getLoginUrl()} className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-medium text-sm flex items-center justify-center gap-2">
-                <Star className="w-4 h-4" /> Entrar para Avaliar
+              <a href={getLoginUrl()} className="w-full py-3 bg-card border border-border text-foreground rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-muted transition-colors">
+                <Star className="w-4 h-4 text-yellow-500" /> Entrar para Avaliar
               </a>
             )}
             <Link href="/feed">
