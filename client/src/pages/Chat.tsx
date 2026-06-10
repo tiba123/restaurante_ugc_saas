@@ -6,23 +6,23 @@ import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-  Sparkles,
-  Send,
-  Plus,
-  MapPin,
-  Star,
-  ExternalLink,
-  ChevronRight,
-  MessageSquare,
-  User,
-  Clock,
-  ThumbsUp,
-  ThumbsDown,
-  Utensils,
+  Sparkles, Send, Plus, MapPin, Star, ExternalLink, ChevronRight,
+  MessageSquare, User, Clock, ThumbsUp, ThumbsDown, Utensils,
+  Phone, Globe, ChevronLeft, Building2, Navigation, Trophy,
+  Zap, Flame, Heart, BookOpen, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
+interface PlaceReview {
+  authorName: string;
+  authorPhoto?: string;
+  rating: number;
+  text: string;
+  timeDescription: string;
+  isPositive: boolean;
+}
+
 interface PlaceInfo {
   placeId: string;
   name: string;
@@ -34,15 +34,19 @@ interface PlaceInfo {
   totalRatings: number;
   priceLevel: number;
   types: string[];
+  reviews: PlaceReview[];
   positiveReviews: string[];
   negativeReviews: string[];
   aiSummary: string;
   highlights: string[];
   mapsUrl: string;
+  googleBusinessUrl: string;
   website?: string;
   phone?: string;
   openNow?: boolean;
+  weekdayHours?: string[];
   photoUrl?: string;
+  photoUrls: string[];
   lat: number;
   lng: number;
 }
@@ -62,75 +66,237 @@ function generateSessionKey(): string {
 }
 
 function getPriceLevelSymbol(level: number): string {
-  const symbols = ["", "$", "$$", "$$$", "$$$$"];
-  return symbols[level] || "";
+  return ["", "$", "$$", "$$$", "$$$$"][level] || "";
 }
 
-// ─── Componente de Card de Lugar ───────────────────────────────────────────────
-function PlaceCard({ place }: { place: PlaceInfo }) {
+function getRatingColor(rating: number): string {
+  if (rating >= 4.5) return "text-emerald-400";
+  if (rating >= 4.0) return "text-green-400";
+  if (rating >= 3.5) return "text-yellow-400";
+  return "text-orange-400";
+}
+
+function getRatingEmoji(rating: number): string {
+  if (rating >= 4.5) return "🏆";
+  if (rating >= 4.0) return "⭐";
+  if (rating >= 3.5) return "👍";
+  return "😐";
+}
+
+// ─── Carrossel de Fotos ────────────────────────────────────────────────────────
+function PhotoCarousel({ photos, name }: { photos: string[]; name: string }) {
+  const [current, setCurrent] = useState(0);
+
+  if (!photos || photos.length === 0) {
+    return (
+      <div className="w-full h-48 bg-gradient-to-br from-amber-900/30 to-orange-900/20 flex items-center justify-center">
+        <Utensils className="w-12 h-12 text-amber-500/30" />
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-[#c9a84c]/30 transition-all duration-200 group">
-      {/* Header com foto ou gradiente */}
-      <div className="relative h-28 bg-gradient-to-br from-[#c9a84c]/20 to-[#8b4513]/20 flex items-center justify-center overflow-hidden">
-        {place.photoUrl ? (
-          <img
-            src={place.photoUrl}
-            alt={place.name}
-            className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
-          />
-        ) : (
-          <Utensils className="w-10 h-10 text-[#c9a84c]/40" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+    <div className="relative w-full h-48 overflow-hidden bg-black/40">
+      <img
+        src={photos[current]}
+        alt={`${name} - foto ${current + 1}`}
+        className="w-full h-full object-cover transition-opacity duration-300"
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = "none";
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 
-        {/* Open Now badge */}
-        {place.openNow !== undefined && (
-          <div className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${
-            place.openNow ? "bg-green-500/80 text-white" : "bg-red-500/80 text-white"
-          }`}>
-            {place.openNow ? "Aberto" : "Fechado"}
+      {photos.length > 1 && (
+        <>
+          <button
+            onClick={() => setCurrent((c) => (c - 1 + photos.length) % photos.length)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center text-white transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setCurrent((c) => (c + 1) % photos.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center text-white transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+            {photos.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrent(i)}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${i === current ? "bg-white w-3" : "bg-white/40"}`}
+              />
+            ))}
           </div>
-        )}
+        </>
+      )}
+    </div>
+  );
+}
 
-        {/* Category badge */}
-        <div className="absolute bottom-2 left-2 text-xs bg-black/60 text-white/80 px-2 py-0.5 rounded-full">
-          {place.category}
-        </div>
+// ─── Carrossel de Reviews ──────────────────────────────────────────────────────
+function ReviewsCarousel({ reviews }: { reviews: PlaceReview[] }) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+
+  // Garantir pelo menos os reviews disponíveis
+  const displayReviews = reviews.slice(0, Math.max(reviews.length, 3));
+  if (displayReviews.length === 0) return null;
+
+  const visibleReviews = showAll ? displayReviews : displayReviews.slice(0, 3);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-xs text-white/50 font-medium uppercase tracking-wide">
+        <BookOpen className="w-3 h-3" />
+        O que dizem os clientes
       </div>
 
-      {/* Content */}
-      <div className="p-3 space-y-2">
-        {/* Name + Rating */}
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="text-white font-semibold text-sm leading-tight line-clamp-2">{place.name}</h4>
-          <div className="flex items-center gap-1 shrink-0">
-            <Star className="w-3 h-3 text-[#c9a84c] fill-[#c9a84c]" />
-            <span className="text-[#c9a84c] text-xs font-bold">{place.rating.toFixed(1)}</span>
+      <div className="space-y-2">
+        {visibleReviews.map((review, i) => (
+          <div
+            key={i}
+            className={`rounded-xl p-3 border text-xs leading-relaxed ${
+              review.isPositive
+                ? "bg-emerald-500/5 border-emerald-500/15"
+                : "bg-red-500/5 border-red-500/15"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              {review.authorPhoto ? (
+                <img
+                  src={review.authorPhoto}
+                  alt={review.authorName}
+                  className="w-6 h-6 rounded-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+                  <User className="w-3 h-3 text-white/40" />
+                </div>
+              )}
+              <span className="text-white/70 font-medium">{review.authorName}</span>
+              <div className="flex items-center gap-0.5 ml-auto">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-2.5 h-2.5 ${s <= review.rating ? "text-amber-400 fill-amber-400" : "text-white/20"}`}
+                  />
+                ))}
+              </div>
+              <span className="text-white/30 text-[10px]">{review.timeDescription}</span>
+            </div>
+            <p className="text-white/60 line-clamp-3">{review.text}</p>
+          </div>
+        ))}
+      </div>
+
+      {displayReviews.length > 3 && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="w-full text-xs text-amber-400/60 hover:text-amber-400 flex items-center justify-center gap-1 py-1 transition-colors"
+        >
+          {showAll ? (
+            <><ChevronUp className="w-3 h-3" /> Mostrar menos</>
+          ) : (
+            <><ChevronDown className="w-3 h-3" /> Ver mais {displayReviews.length - 3} avaliações</>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Card de Lugar Gamificado ──────────────────────────────────────────────────
+function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const rankColors = [
+    "from-amber-500 to-yellow-400",    // 1º - ouro
+    "from-slate-400 to-slate-300",     // 2º - prata
+    "from-amber-700 to-amber-600",     // 3º - bronze
+    "from-purple-500 to-purple-400",   // 4º+
+  ];
+  const rankColor = rankColors[Math.min(rank - 1, 3)];
+  const rankEmoji = ["🥇", "🥈", "🥉", "✨"][Math.min(rank - 1, 3)];
+
+  return (
+    <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 ${
+      expanded ? "border-amber-500/40 shadow-lg shadow-amber-500/10" : "border-white/10 hover:border-amber-500/20"
+    } bg-gradient-to-b from-white/5 to-white/2`}>
+
+      {/* Badge de ranking */}
+      <div className={`absolute top-3 left-3 z-10 w-8 h-8 rounded-full bg-gradient-to-br ${rankColor} flex items-center justify-center text-sm font-bold shadow-lg`}>
+        {rankEmoji}
+      </div>
+
+      {/* Status badge */}
+      {place.openNow !== undefined && (
+        <div className={`absolute top-3 right-3 z-10 text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+          place.openNow ? "bg-emerald-500/80 text-white" : "bg-red-500/80 text-white"
+        }`}>
+          {place.openNow ? "● Aberto" : "● Fechado"}
+        </div>
+      )}
+
+      {/* Carrossel de fotos */}
+      <PhotoCarousel photos={place.photoUrls || (place.photoUrl ? [place.photoUrl] : [])} name={place.name} />
+
+      {/* Conteúdo principal */}
+      <div className="p-4 space-y-3">
+        {/* Nome + categoria */}
+        <div>
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="text-white font-bold text-base leading-tight">{place.name}</h4>
+            <span className="text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full shrink-0 mt-0.5">
+              {place.category}
+            </span>
+          </div>
+
+          {/* Rating + avaliações */}
+          <div className="flex items-center gap-3 mt-1.5">
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-3 h-3 ${s <= Math.round(place.rating) ? "text-amber-400 fill-amber-400" : "text-white/20"}`}
+                  />
+                ))}
+              </div>
+              <span className={`text-sm font-bold ${getRatingColor(place.rating)}`}>
+                {place.rating.toFixed(1)}
+              </span>
+            </div>
+            <span className="text-white/40 text-xs">
+              {place.totalRatings.toLocaleString("pt-BR")} avaliações
+            </span>
+            {place.priceLevel > 0 && (
+              <span className="text-amber-400/70 text-xs font-medium">
+                {getPriceLevelSymbol(place.priceLevel)}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Location + Price */}
-        <div className="flex items-center gap-2 text-xs text-white/50">
-          <MapPin className="w-3 h-3 shrink-0" />
-          <span className="truncate">{place.neighborhood}</span>
-          {place.priceLevel > 0 && (
-            <>
-              <span>·</span>
-              <span className="text-[#c9a84c]/70">{getPriceLevelSymbol(place.priceLevel)}</span>
-            </>
-          )}
+        {/* Localização */}
+        <div className="flex items-center gap-1.5 text-xs text-white/50">
+          <MapPin className="w-3 h-3 text-amber-400/60 shrink-0" />
+          <span className="truncate">{place.neighborhood} · {place.address.split(",")[0]}</span>
         </div>
 
-        {/* AI Summary */}
+        {/* Resumo IA */}
         {place.aiSummary && (
-          <p className="text-white/60 text-xs leading-relaxed line-clamp-2">{place.aiSummary}</p>
+          <p className="text-white/70 text-sm leading-relaxed">{place.aiSummary}</p>
         )}
 
-        {/* Highlights */}
+        {/* Destaques */}
         {place.highlights.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {place.highlights.slice(0, 3).map((h, i) => (
-              <span key={i} className="text-xs bg-[#c9a84c]/10 text-[#c9a84c]/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+          <div className="flex flex-wrap gap-1.5">
+            {place.highlights.map((h, i) => (
+              <span key={i} className="text-xs bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/15 px-2.5 py-1 rounded-full flex items-center gap-1">
                 <ThumbsUp className="w-2.5 h-2.5" />
                 {h}
               </span>
@@ -138,102 +304,179 @@ function PlaceCard({ place }: { place: PlaceInfo }) {
           </div>
         )}
 
-        {/* Negative review snippet */}
+        {/* Ponto negativo (se houver) */}
         {place.negativeReviews.length > 0 && (
-          <div className="flex items-start gap-1.5 text-xs text-red-400/60">
+          <div className="flex items-start gap-2 text-xs text-red-400/60 bg-red-500/5 border border-red-500/10 rounded-xl px-3 py-2">
             <ThumbsDown className="w-3 h-3 mt-0.5 shrink-0" />
-            <span className="line-clamp-1">{place.negativeReviews[0]?.slice(0, 60)}...</span>
+            <span className="line-clamp-2">{place.negativeReviews[0]?.slice(0, 80)}...</span>
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-2 pt-1">
+        {/* Botão expandir/recolher */}
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 py-1 transition-colors"
+        >
+          {expanded ? (
+            <><ChevronUp className="w-3.5 h-3.5" /> Mostrar menos</>
+          ) : (
+            <><ChevronDown className="w-3.5 h-3.5" /> Ver avaliações e detalhes</>
+          )}
+        </button>
+
+        {/* Seção expandida: reviews + horários + contato */}
+        {expanded && (
+          <div className="space-y-4 pt-2 border-t border-white/10">
+            {/* Reviews */}
+            <ReviewsCarousel reviews={place.reviews || []} />
+
+            {/* Horários */}
+            {place.weekdayHours && place.weekdayHours.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 text-xs text-white/50 font-medium uppercase tracking-wide">
+                  <Clock className="w-3 h-3" />
+                  Horários
+                </div>
+                <div className="space-y-0.5">
+                  {place.weekdayHours.map((h, i) => (
+                    <p key={i} className="text-xs text-white/50">{h}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Contato */}
+            {(place.phone || place.website) && (
+              <div className="flex gap-2">
+                {place.phone && (
+                  <a
+                    href={`tel:${place.phone}`}
+                    className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 text-white/60 px-3 py-1.5 rounded-xl transition-colors"
+                  >
+                    <Phone className="w-3 h-3" />
+                    {place.phone}
+                  </a>
+                )}
+                {place.website && (
+                  <a
+                    href={place.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 text-white/60 px-3 py-1.5 rounded-xl transition-colors"
+                  >
+                    <Globe className="w-3 h-3" />
+                    Site oficial
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CTAs principais */}
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <a
+            href={place.googleBusinessUrl || place.mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/20 text-amber-300 py-2.5 rounded-xl transition-all font-medium"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            Google Meu Negócio
+          </a>
           <a
             href={place.mapsUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-[#c9a84c]/15 hover:bg-[#c9a84c]/25 text-[#c9a84c] py-1.5 rounded-lg transition-colors"
+            className="flex items-center justify-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 py-2.5 rounded-xl transition-all"
           >
-            <MapPin className="w-3 h-3" />
+            <Navigation className="w-3.5 h-3.5" />
             Ver no Maps
           </a>
-          {place.website && (
-            <a
-              href={place.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1 text-xs bg-white/5 hover:bg-white/10 text-white/60 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Componente de Mensagem ────────────────────────────────────────────────────
+// ─── Mensagem de Chat ──────────────────────────────────────────────────────────
 function ChatMessage({ message }: { message: Message }) {
   const isUser = message.role === "user";
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
       {/* Avatar */}
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${
-        isUser ? "bg-[#c9a84c]/20" : "bg-[#8b4513]/30"
+      <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 mt-1 shadow-lg ${
+        isUser
+          ? "bg-gradient-to-br from-amber-500 to-orange-500"
+          : "bg-gradient-to-br from-purple-600 to-indigo-600"
       }`}>
         {isUser ? (
-          <User className="w-4 h-4 text-[#c9a84c]" />
+          <User className="w-4 h-4 text-white" />
         ) : (
-          <Sparkles className="w-4 h-4 text-[#c9a84c]" />
+          <Sparkles className="w-4 h-4 text-white" />
         )}
       </div>
 
-      {/* Content */}
-      <div className={`flex-1 max-w-[85%] space-y-3 ${isUser ? "items-end" : "items-start"} flex flex-col`}>
+      {/* Conteúdo */}
+      <div className={`flex-1 max-w-[88%] space-y-4 flex flex-col ${isUser ? "items-end" : "items-start"}`}>
         {/* Bubble */}
         <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
           isUser
-            ? "bg-[#c9a84c] text-black rounded-tr-sm font-medium"
+            ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-tr-sm font-medium shadow-lg shadow-amber-500/20"
             : "bg-white/8 text-white/90 rounded-tl-sm border border-white/10"
         }`}>
           {message.isLoading ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <div className="flex gap-1">
-                <div className="w-2 h-2 bg-[#c9a84c]/60 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <div className="w-2 h-2 bg-[#c9a84c]/60 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <div className="w-2 h-2 bg-[#c9a84c]/60 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                {[0, 150, 300].map((delay) => (
+                  <div
+                    key={delay}
+                    className="w-2 h-2 bg-amber-400/60 rounded-full animate-bounce"
+                    style={{ animationDelay: `${delay}ms` }}
+                  />
+                ))}
               </div>
-              <span className="text-white/40 text-xs">Buscando recomendações...</span>
+              <span className="text-white/40 text-xs">O Indicador está pesquisando...</span>
             </div>
           ) : isUser ? (
             <span>{message.content}</span>
           ) : (
-            <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul>li]:mb-1 [&>strong]:text-[#c9a84c]">
+            <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul>li]:mb-1 [&>strong]:text-amber-300">
               <Streamdown>{message.content}</Streamdown>
             </div>
           )}
         </div>
 
-        {/* Place Cards */}
+        {/* Cards de lugares */}
         {!message.isLoading && message.recommendedPlaces && message.recommendedPlaces.length > 0 && (
-          <div className="w-full">
-            <p className="text-xs text-white/40 mb-2 flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              {message.recommendedPlaces.length} lugar{message.recommendedPlaces.length > 1 ? "es" : ""} encontrado{message.recommendedPlaces.length > 1 ? "s" : ""}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {message.recommendedPlaces.map((place) => (
-                <PlaceCard key={place.placeId} place={place} />
+          <div className="w-full space-y-3">
+            {/* Header dos resultados */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs text-amber-300 font-semibold">
+                  {message.recommendedPlaces.length} lugar{message.recommendedPlaces.length > 1 ? "es" : ""} indicado{message.recommendedPlaces.length > 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-white/30">
+                <Zap className="w-3 h-3" />
+                Baseado em avaliações reais do Google
+              </div>
+            </div>
+
+            {/* Grid de cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {message.recommendedPlaces.map((place, i) => (
+                <PlaceCard key={place.placeId} place={place} rank={i + 1} />
               ))}
             </div>
           </div>
         )}
 
         {/* Timestamp */}
-        {message.createdAt && (
-          <div className={`flex items-center gap-1 text-xs text-white/30 ${isUser ? "flex-row-reverse" : ""}`}>
+        {message.createdAt && !message.isLoading && (
+          <div className={`flex items-center gap-1 text-xs text-white/25 ${isUser ? "flex-row-reverse" : ""}`}>
             <Clock className="w-3 h-3" />
             {new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
           </div>
@@ -245,15 +488,102 @@ function ChatMessage({ message }: { message: Message }) {
 
 // ─── Sugestões Rápidas ─────────────────────────────────────────────────────────
 const QUICK_SUGGESTIONS = [
-  "Onde jantar hoje à noite?",
-  "Melhor sushi em São Paulo?",
-  "Restaurante romântico no Itaim?",
-  "Shopping perto da Vila Madalena?",
-  "Melhor hambúrguer artesanal?",
-  "Café para trabalhar em Pinheiros?",
-  "Posto de gasolina 24h no centro?",
-  "Churrascaria premium em SP?",
+  { icon: "🍣", text: "Melhor sushi em SP?" },
+  { icon: "🌙", text: "Onde jantar hoje à noite?" },
+  { icon: "💑", text: "Restaurante romântico no Itaim?" },
+  { icon: "🛍️", text: "Shopping perto da Vila Madalena?" },
+  { icon: "🍔", text: "Melhor hambúrguer artesanal?" },
+  { icon: "☕", text: "Café para trabalhar em Pinheiros?" },
+  { icon: "⛽", text: "Posto 24h no centro de SP?" },
+  { icon: "🥩", text: "Churrascaria premium em SP?" },
 ];
+
+// ─── Tela de Boas-vindas ───────────────────────────────────────────────────────
+function WelcomeScreen({ quizCompleted, quizLoading, onSend, disabled }: {
+  quizCompleted?: boolean;
+  quizLoading: boolean;
+  onSend: (text: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center text-center space-y-8 py-6 px-4">
+      {/* Logo animado */}
+      <div className="relative">
+        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 flex items-center justify-center shadow-2xl shadow-amber-500/30">
+          <Sparkles className="w-12 h-12 text-white" />
+        </div>
+        <div className="absolute -top-1 -right-1 w-7 h-7 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
+          <Flame className="w-4 h-4 text-white" />
+        </div>
+      </div>
+
+      {/* Título */}
+      <div className="space-y-2">
+        <h2 className="text-3xl font-bold text-white font-['Playfair_Display']">
+          O Indicador 🗺️
+        </h2>
+        <p className="text-white/50 max-w-sm mx-auto text-sm leading-relaxed">
+          Seu guia gastronômico com IA para São Paulo. Recomendações baseadas em <strong className="text-amber-400">avaliações reais do Google</strong>, personalizadas para o seu gosto.
+        </p>
+      </div>
+
+      {/* Stats gamificados */}
+      <div className="flex gap-4">
+        {[
+          { icon: "⭐", label: "Avaliações reais", value: "Google" },
+          { icon: "🤖", label: "Powered by", value: "IA" },
+          { icon: "📍", label: "Foco em", value: "São Paulo" },
+        ].map((stat) => (
+          <div key={stat.label} className="flex flex-col items-center gap-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+            <span className="text-xl">{stat.icon}</span>
+            <span className="text-white font-bold text-sm">{stat.value}</span>
+            <span className="text-white/40 text-[10px]">{stat.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Quiz CTA */}
+      {!quizCompleted && !quizLoading && (
+        <div className="bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border border-purple-500/20 rounded-2xl p-4 max-w-sm w-full">
+          <div className="flex items-center gap-2 mb-2">
+            <Heart className="w-4 h-4 text-purple-400" />
+            <p className="text-purple-300 text-sm font-semibold">Personalize suas indicações!</p>
+          </div>
+          <p className="text-white/50 text-xs mb-3 leading-relaxed">
+            Responda 7 perguntas rápidas e receba recomendações ainda mais precisas para o seu perfil.
+          </p>
+          <Link href="/quiz">
+            <Button size="sm" className="bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-xs w-full border-0">
+              Fazer Quiz de Perfil
+              <ChevronRight className="w-3 h-3 ml-1" />
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* Sugestões rápidas */}
+      <div className="w-full max-w-lg space-y-3">
+        <p className="text-xs text-white/30 flex items-center justify-center gap-1.5">
+          <MessageSquare className="w-3 h-3" />
+          Experimente perguntar:
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {QUICK_SUGGESTIONS.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => onSend(s.text)}
+              disabled={disabled}
+              className="flex items-center gap-2 text-left text-xs bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-500/30 text-white/60 hover:text-white px-3 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-40 group"
+            >
+              <span className="text-base group-hover:scale-110 transition-transform">{s.icon}</span>
+              <span>{s.text}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Componente Principal ──────────────────────────────────────────────────────
 export default function Chat() {
@@ -264,15 +594,12 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const utils = trpc.useUtils();
   const quizProfile = trpc.chat.quiz.getProfile.useQuery(undefined, { enabled: !!user });
-  const existingSessions = trpc.chat.getSessions.useQuery(undefined, { enabled: !!user });
   const createSession = trpc.chat.createSession.useMutation();
-  const sendMessage = trpc.chat.sendMessage.useMutation();
+  const sendMessageMutation = trpc.chat.sendMessage.useMutation();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -280,7 +607,6 @@ export default function Chat() {
     }
   }, [user, authLoading]);
 
-  // Criar nova sessão ao montar
   useEffect(() => {
     if (!user) return;
     createSession.mutateAsync({ sessionKey }).then((session) => {
@@ -288,7 +614,6 @@ export default function Chat() {
     });
   }, [user]);
 
-  // Scroll para o final
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -298,18 +623,14 @@ export default function Chat() {
     if (!messageText || !sessionId || isSending) return;
 
     setInput("");
-    setShowSuggestions(false);
     setIsSending(true);
 
-    // Adicionar mensagem do usuário imediatamente
     const userMsg: Message = { role: "user", content: messageText, createdAt: new Date() };
     const loadingMsg: Message = { role: "assistant", content: "", isLoading: true };
     setMessages((prev) => [...prev, userMsg, loadingMsg]);
 
     try {
-      const result = await sendMessage.mutateAsync({ sessionId, message: messageText });
-
-      // Substituir loading pela resposta real
+      const result = await sendMessageMutation.mutateAsync({ sessionId, message: messageText });
       setMessages((prev) => {
         const withoutLoading = prev.filter((m) => !m.isLoading);
         return [
@@ -323,14 +644,14 @@ export default function Chat() {
           },
         ];
       });
-    } catch (e) {
+    } catch {
       setMessages((prev) => prev.filter((m) => !m.isLoading));
       toast.error("Erro ao enviar mensagem. Tente novamente.");
     } finally {
       setIsSending(false);
       inputRef.current?.focus();
     }
-  }, [input, sessionId, isSending, sendMessage]);
+  }, [input, sessionId, isSending, sendMessageMutation]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -339,132 +660,83 @@ export default function Chat() {
     }
   };
 
-  const handleNewChat = () => {
-    setMessages([]);
-    setShowSuggestions(true);
-    setInput("");
-    window.location.reload();
-  };
-
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#0f0d0b] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#c9a84c] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#0a0908] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  const quizCompleted = quizProfile.data?.quizCompleted;
+  const hasMessages = messages.length > 0;
 
   return (
-    <div className="min-h-screen bg-[#0f0d0b] flex flex-col">
+    <div className="min-h-screen bg-[#0a0908] flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0f0d0b]/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
+      <div className="sticky top-0 z-10 bg-[#0a0908]/95 backdrop-blur-md border-b border-white/8 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-[#c9a84c] to-[#8b4513] rounded-xl flex items-center justify-center">
+            <div className="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-white font-semibold text-sm font-['Playfair_Display']">Tastee AI</h1>
-              <p className="text-white/40 text-xs">Seu guia gastronômico em SP</p>
+              <h1 className="text-white font-bold text-sm font-['Playfair_Display']">O Indicador</h1>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                <p className="text-white/40 text-xs">Guia gastronômico com IA · São Paulo</p>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!quizCompleted && (
+            {!quizProfile.data?.quizCompleted && (
               <Link href="/quiz">
-                <Button variant="outline" size="sm" className="text-xs border-[#c9a84c]/30 text-[#c9a84c] hover:bg-[#c9a84c]/10 bg-transparent">
-                  <Sparkles className="w-3 h-3 mr-1" />
-                  Configurar Perfil
+                <Button variant="outline" size="sm" className="text-xs border-purple-500/30 text-purple-300 hover:bg-purple-500/10 bg-transparent">
+                  <Heart className="w-3 h-3 mr-1" />
+                  Meu Perfil
                 </Button>
               </Link>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleNewChat}
-              className="text-white/50 hover:text-white hover:bg-white/10 text-xs"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Novo Chat
-            </Button>
+            {hasMessages && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => window.location.reload()}
+                className="text-white/40 hover:text-white hover:bg-white/8 text-xs"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Novo
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Messages Area */}
+      {/* Área de mensagens */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-          {/* Welcome / Empty State */}
-          {messages.length === 0 && (
-            <div className="text-center space-y-6 py-8">
-              <div className="w-20 h-20 bg-gradient-to-br from-[#c9a84c]/20 to-[#8b4513]/20 rounded-2xl flex items-center justify-center mx-auto">
-                <Sparkles className="w-10 h-10 text-[#c9a84c]" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold text-white font-['Playfair_Display']">
-                  Olá! Sou o Tastee AI 👋
-                </h2>
-                <p className="text-white/50 max-w-md mx-auto text-sm leading-relaxed">
-                  Seu assistente gastronômico especializado em São Paulo. Posso recomendar restaurantes, bares, shoppings, postos de gasolina e muito mais — com base nas avaliações reais do Google!
-                </p>
-              </div>
-
-              {/* Quiz CTA */}
-              {!quizCompleted && !quizProfile.isLoading && (
-                <div className="bg-[#c9a84c]/10 border border-[#c9a84c]/20 rounded-xl p-4 max-w-sm mx-auto">
-                  <p className="text-[#c9a84c] text-sm font-medium mb-2">✨ Personalize suas recomendações</p>
-                  <p className="text-white/50 text-xs mb-3">Faça o quiz de perfil para receber sugestões ainda mais precisas para o seu gosto!</p>
-                  <Link href="/quiz">
-                    <Button size="sm" className="bg-[#c9a84c] hover:bg-[#b8973b] text-black text-xs w-full">
-                      Fazer Quiz Agora
-                      <ChevronRight className="w-3 h-3 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              )}
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          {!hasMessages ? (
+            <WelcomeScreen
+              quizCompleted={quizProfile.data?.quizCompleted}
+              quizLoading={quizProfile.isLoading}
+              onSend={handleSend}
+              disabled={isSending || !sessionId}
+            />
+          ) : (
+            <div className="space-y-6">
+              {messages.map((msg, i) => (
+                <ChatMessage key={i} message={msg} />
+              ))}
             </div>
           )}
-
-          {/* Messages */}
-          {messages.map((msg, i) => (
-            <ChatMessage key={i} message={msg} />
-          ))}
-
-          {/* Scroll anchor */}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Quick Suggestions */}
-      {showSuggestions && messages.length === 0 && (
-        <div className="px-4 pb-2">
-          <div className="max-w-4xl mx-auto">
-            <p className="text-xs text-white/30 mb-2 flex items-center gap-1">
-              <MessageSquare className="w-3 h-3" />
-              Sugestões de perguntas
-            </p>
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {QUICK_SUGGESTIONS.map((suggestion, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(suggestion)}
-                  disabled={isSending || !sessionId}
-                  className="shrink-0 text-xs bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#c9a84c]/30 text-white/60 hover:text-white px-3 py-2 rounded-xl transition-all duration-200 disabled:opacity-40"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Input Area */}
-      <div className="sticky bottom-0 bg-[#0f0d0b]/95 backdrop-blur-sm border-t border-white/10 px-4 py-4">
+      {/* Input */}
+      <div className="sticky bottom-0 bg-[#0a0908]/95 backdrop-blur-md border-t border-white/8 px-4 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-3 items-end">
-            <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[#c9a84c]/40 transition-colors">
+            <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl overflow-hidden focus-within:border-amber-500/40 focus-within:bg-white/8 transition-all">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -473,29 +745,28 @@ export default function Chat() {
                 placeholder="Pergunte sobre restaurantes, bares, shoppings em SP..."
                 rows={1}
                 disabled={isSending || !sessionId}
-                className="w-full bg-transparent text-white placeholder-white/30 text-sm px-4 py-3 resize-none outline-none min-h-[44px] max-h-32 disabled:opacity-50"
-                style={{ height: "auto" }}
+                className="w-full bg-transparent text-white placeholder-white/25 text-sm px-4 py-3 resize-none outline-none min-h-[44px] max-h-32 disabled:opacity-50"
                 onInput={(e) => {
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = "auto";
-                  target.style.height = Math.min(target.scrollHeight, 128) + "px";
+                  const t = e.target as HTMLTextAreaElement;
+                  t.style.height = "auto";
+                  t.style.height = Math.min(t.scrollHeight, 128) + "px";
                 }}
               />
             </div>
             <Button
               onClick={() => handleSend()}
               disabled={!input.trim() || isSending || !sessionId}
-              className="w-11 h-11 p-0 bg-[#c9a84c] hover:bg-[#b8973b] text-black rounded-2xl shrink-0 disabled:opacity-40"
+              className="w-12 h-12 p-0 bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white rounded-2xl shrink-0 disabled:opacity-40 shadow-lg shadow-amber-500/20 border-0"
             >
               {isSending ? (
-                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <Send className="w-4 h-4" />
               )}
             </Button>
           </div>
-          <p className="text-xs text-white/20 text-center mt-2">
-            Pressione Enter para enviar · Shift+Enter para nova linha
+          <p className="text-xs text-white/15 text-center mt-2">
+            Enter para enviar · Shift+Enter para nova linha
           </p>
         </div>
       </div>

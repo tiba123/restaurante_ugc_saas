@@ -8,8 +8,18 @@
 import { makeRequest, PlacesSearchResult, PlaceDetailsResult } from "./_core/map";
 import { invokeLLM } from "./_core/llm";
 import { getCachedPlace, upsertPlaceCache } from "./db";
+import { ENV } from "./_core/env";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
+export interface PlaceReview {
+  authorName: string;
+  authorPhoto?: string;
+  rating: number;
+  text: string;
+  timeDescription: string; // "há 2 meses"
+  isPositive: boolean;
+}
+
 export interface PlaceInfo {
   placeId: string;
   name: string;
@@ -21,15 +31,22 @@ export interface PlaceInfo {
   totalRatings: number;
   priceLevel: number;
   types: string[];
-  positiveReviews: string[];
-  negativeReviews: string[];
+  // Reviews completos com autor, data e foto
+  reviews: PlaceReview[];
+  positiveReviews: string[]; // mantido para compatibilidade
+  negativeReviews: string[]; // mantido para compatibilidade
   aiSummary: string;
   highlights: string[];
+  // URLs
   mapsUrl: string;
+  googleBusinessUrl: string; // Link Google Meu Negócio
   website?: string;
   phone?: string;
   openNow?: boolean;
+  weekdayHours?: string[];
+  // Fotos (múltiplas)
   photoUrl?: string;
+  photoUrls: string[];
   lat: number;
   lng: number;
 }
@@ -71,12 +88,25 @@ function inferCategory(types: string[]): string {
 
 // ─── Extrair bairro do endereço formatado ──────────────────────────────────────
 function extractNeighborhood(address: string): string {
-  // Endereços do Google geralmente: "Rua X, 123 - Bairro, São Paulo - SP"
   const match = address.match(/- ([^,]+),\s*São Paulo/i);
   if (match) return match[1].trim();
   const parts = address.split(",");
   if (parts.length >= 2) return parts[1].trim();
   return "São Paulo";
+}
+
+// ─── Construir URL de foto via proxy Manus ─────────────────────────────────────
+function buildPhotoUrl(photoReference: string, maxWidth = 800): string {
+  const baseUrl = (ENV.forgeApiUrl || "").replace(/\/+$/, "");
+  const apiKey = ENV.forgeApiKey || "";
+  return `${baseUrl}/v1/maps/proxy/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
+}
+
+// ─── Construir URL do Google Meu Negócio ───────────────────────────────────────
+function buildGoogleBusinessUrl(placeId: string, name: string): string {
+  // URL canônica para o perfil do Google Meu Negócio
+  const encodedName = encodeURIComponent(name);
+  return `https://www.google.com/maps/search/?api=1&query=${encodedName}&query_place_id=${placeId}`;
 }
 
 // ─── Gerar resumo por IA ───────────────────────────────────────────────────────
@@ -155,15 +185,29 @@ async function fetchPlaceDetails(placeId: string): Promise<PlaceInfo | null> {
     if (details.status !== "OK" || !details.result) return null;
 
     const r = details.result;
-    const reviews = r.reviews || [];
-    const positiveReviews = reviews
-      .filter((rv) => rv.rating >= 4)
-      .map((rv) => rv.text)
-      .filter(Boolean);
-    const negativeReviews = reviews
-      .filter((rv) => rv.rating <= 2)
-      .map((rv) => rv.text)
-      .filter(Boolean);
+    const rawReviews = (r.reviews || []) as Array<{
+      author_name: string;
+      author_url?: string;
+      profile_photo_url?: string;
+      rating: number;
+      text: string;
+      time: number;
+      relative_time_description?: string;
+    }>;
+
+    // Montar reviews completos com autor e data
+    const reviews: PlaceReview[] = rawReviews.map((rv) => ({
+      authorName: rv.author_name,
+      authorPhoto: rv.profile_photo_url,
+      rating: rv.rating,
+      text: rv.text,
+      timeDescription: rv.relative_time_description || new Date(rv.time * 1000).toLocaleDateString("pt-BR"),
+      isPositive: rv.rating >= 4,
+    }));
+
+    // Separar positivos e negativos (mantendo compatibilidade)
+    const positiveReviews = reviews.filter((rv) => rv.isPositive).map((rv) => rv.text).filter(Boolean);
+    const negativeReviews = reviews.filter((rv) => !rv.isPositive).map((rv) => rv.text).filter(Boolean);
 
     const types = (r as any).types || [];
     const category = inferCategory(types);
@@ -173,7 +217,7 @@ async function fetchPlaceDetails(placeId: string): Promise<PlaceInfo | null> {
     const lat = r.geometry?.location?.lat || 0;
     const lng = r.geometry?.location?.lng || 0;
 
-    // Gerar resumo por IA (apenas se tiver avaliações)
+    // Gerar resumo por IA
     let aiSummary = "";
     let highlights: string[] = [];
     if (positiveReviews.length > 0 || negativeReviews.length > 0) {
@@ -182,16 +226,18 @@ async function fetchPlaceDetails(placeId: string): Promise<PlaceInfo | null> {
       highlights = aiResult.highlights;
     }
 
-    // URL do Google Maps
+    // URLs
     const mapsUrl = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+    const googleBusinessUrl = buildGoogleBusinessUrl(placeId, r.name);
 
-    // Foto (primeira foto do lugar)
-    let photoUrl: string | undefined;
-    const photos = (r as any).photos;
+    // Fotos (até 5 fotos)
+    const photos = (r as any).photos as Array<{ photo_reference: string }> | undefined;
+    const photoUrls: string[] = [];
     if (photos && photos.length > 0) {
-      const photoRef = photos[0].photo_reference;
-      if (photoRef) {
-        photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${photoRef}`;
+      const maxPhotos = Math.min(photos.length, 5);
+      for (let i = 0; i < maxPhotos; i++) {
+        const ref = photos[i]?.photo_reference;
+        if (ref) photoUrls.push(buildPhotoUrl(ref, 800));
       }
     }
 
@@ -206,15 +252,19 @@ async function fetchPlaceDetails(placeId: string): Promise<PlaceInfo | null> {
       totalRatings: r.user_ratings_total || 0,
       priceLevel: (r as any).price_level || 0,
       types,
+      reviews,
       positiveReviews,
       negativeReviews,
       aiSummary,
       highlights,
       mapsUrl,
+      googleBusinessUrl,
       website: r.website,
       phone: r.formatted_phone_number,
       openNow: r.opening_hours?.open_now,
-      photoUrl,
+      weekdayHours: r.opening_hours?.weekday_text,
+      photoUrl: photoUrls[0],
+      photoUrls,
       lat,
       lng,
     };
@@ -227,7 +277,6 @@ async function fetchPlaceDetails(placeId: string): Promise<PlaceInfo | null> {
 // ─── Buscar lugares por query (com cache) ──────────────────────────────────────
 export async function searchPlaces(query: string, limit = 5): Promise<PlaceInfo[]> {
   try {
-    // Buscar no Google Places Text Search
     const searchResult = await makeRequest<PlacesSearchResult>("/maps/api/place/textsearch/json", {
       query: `${query} São Paulo SP`,
       language: "pt-BR",
@@ -247,6 +296,12 @@ export async function searchPlaces(query: string, limit = 5): Promise<PlaceInfo[
       // Verificar cache primeiro
       const cached = await getCachedPlace(placeId);
       if (cached) {
+        // Reconstruir reviews a partir do cache (armazenados como JSON)
+        const cachedReviews = (cached as any).reviewsJson as PlaceReview[] | null;
+        const reviews: PlaceReview[] = cachedReviews || [];
+        const photoUrlsRaw = (cached as any).photoUrlsJson as string[] | null;
+        const photoUrls: string[] = photoUrlsRaw || (cached.photoUrl ? [cached.photoUrl] : []);
+
         places.push({
           placeId: cached.placeId,
           name: cached.name,
@@ -258,15 +313,19 @@ export async function searchPlaces(query: string, limit = 5): Promise<PlaceInfo[
           totalRatings: cached.totalRatings || 0,
           priceLevel: cached.priceLevel || 0,
           types: (cached.types as string[]) || [],
+          reviews,
           positiveReviews: (cached.positiveReviews as string[]) || [],
           negativeReviews: (cached.negativeReviews as string[]) || [],
           aiSummary: cached.aiSummary || "",
           highlights: (cached.highlights as string[]) || [],
           mapsUrl: cached.mapsUrl || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+          googleBusinessUrl: buildGoogleBusinessUrl(placeId, cached.name),
           website: cached.website || undefined,
           phone: cached.phone || undefined,
           openNow: cached.openNow ?? undefined,
+          weekdayHours: undefined,
           photoUrl: cached.photoUrl || undefined,
+          photoUrls,
           lat: parseFloat(cached.lat || "0"),
           lng: parseFloat(cached.lng || "0"),
         });
@@ -300,7 +359,10 @@ export async function searchPlaces(query: string, limit = 5): Promise<PlaceInfo[
         photoUrl: details.photoUrl,
         lat: String(details.lat),
         lng: String(details.lng),
-      });
+        // Campos extras armazenados como JSON no cache
+        reviewsJson: details.reviews,
+        photoUrlsJson: details.photoUrls,
+      } as any);
 
       places.push(details);
     }
