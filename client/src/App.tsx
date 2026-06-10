@@ -44,7 +44,7 @@ function GlobalNav() {
     { href: "/explore", icon: Search, label: "Explorar" },
     { href: "/upload", icon: PlusCircle, label: "Gravar" },
     { href: "/missions", icon: Target, label: "Missões" },
-    { href: "/chat", icon: MessageCircle, label: "Chat IA" },
+    { href: "/chat", icon: MessageCircle, label: "O Indicador" },
     { href: "/social", icon: Users, label: "Amigos" },
     { href: "/profile", icon: User, label: "Perfil" },
   ];

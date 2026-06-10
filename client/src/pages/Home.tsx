@@ -111,6 +111,11 @@ export default function Home() {
             <Link href="/feed">
               <span className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer">Feed</span>
             </Link>
+            <Link href="/chat">
+              <span className="text-sm font-medium text-primary font-semibold hover:text-primary/80 transition-colors cursor-pointer flex items-center gap-1">
+                ✨ O Indicador
+              </span>
+            </Link>
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <Link href="/social">
@@ -132,6 +137,9 @@ export default function Home() {
             )}
           </div>
           <div className="flex md:hidden items-center gap-3">
+            <Link href="/chat">
+              <span className="text-sm font-medium text-primary font-semibold cursor-pointer">✨ O Indicador</span>
+            </Link>
             {isAuthenticated ? (
               <Link href="/profile">
                 <span className="text-sm font-medium text-primary cursor-pointer">Perfil</span>
