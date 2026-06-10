@@ -149,7 +149,7 @@ function ReviewsCarousel({ reviews }: { reviews: PlaceReview[] }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs text-white/50 font-medium uppercase tracking-wide">
+      <div className="flex items-center gap-2 text-xs text-white/80 font-medium uppercase tracking-wide">
         <BookOpen className="w-3 h-3" />
         O que dizem os clientes
       </div>
@@ -160,8 +160,8 @@ function ReviewsCarousel({ reviews }: { reviews: PlaceReview[] }) {
             key={i}
             className={`rounded-xl p-3 border text-xs leading-relaxed ${
               review.isPositive
-                ? "bg-emerald-500/5 border-emerald-500/15"
-                : "bg-red-500/5 border-red-500/15"
+                ? "bg-emerald-500/10 border-emerald-500/25"
+                : "bg-red-500/10 border-red-500/25"
             }`}
           >
             <div className="flex items-center gap-2 mb-1.5">
@@ -177,7 +177,7 @@ function ReviewsCarousel({ reviews }: { reviews: PlaceReview[] }) {
                   <User className="w-3 h-3 text-white/40" />
                 </div>
               )}
-              <span className="text-white/70 font-medium">{review.authorName}</span>
+              <span className="text-white/95 font-semibold">{review.authorName}</span>
               <div className="flex items-center gap-0.5 ml-auto">
                 {[1, 2, 3, 4, 5].map((s) => (
                   <Star
@@ -186,9 +186,9 @@ function ReviewsCarousel({ reviews }: { reviews: PlaceReview[] }) {
                   />
                 ))}
               </div>
-              <span className="text-white/30 text-[10px]">{review.timeDescription}</span>
+              <span className="text-white/60 text-[10px]">{review.timeDescription}</span>
             </div>
-            <p className="text-white/60 line-clamp-3">{review.text}</p>
+            <p className="text-white/85 line-clamp-3 leading-relaxed">{review.text}</p>
           </div>
         ))}
       </div>
@@ -196,7 +196,7 @@ function ReviewsCarousel({ reviews }: { reviews: PlaceReview[] }) {
       {displayReviews.length > 3 && (
         <button
           onClick={() => setShowAll(!showAll)}
-          className="w-full text-xs text-amber-400/60 hover:text-amber-400 flex items-center justify-center gap-1 py-1 transition-colors"
+          className="w-full text-xs text-amber-400 hover:text-amber-300 flex items-center justify-center gap-1 py-1 transition-colors font-medium"
         >
           {showAll ? (
             <><ChevronUp className="w-3 h-3" /> Mostrar menos</>
@@ -225,7 +225,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
   return (
     <div className={`relative rounded-2xl overflow-hidden border transition-all duration-300 ${
       expanded ? "border-amber-500/40 shadow-lg shadow-amber-500/10" : "border-white/10 hover:border-amber-500/20"
-    } bg-gradient-to-b from-white/5 to-white/2`}>
+    } bg-[#1a1817]`}>
 
       {/* Badge de ranking */}
       <div className={`absolute top-3 left-3 z-10 w-8 h-8 rounded-full bg-gradient-to-br ${rankColor} flex items-center justify-center text-sm font-bold shadow-lg`}>
@@ -250,7 +250,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
         <div>
           <div className="flex items-start justify-between gap-2">
             <h4 className="text-white font-bold text-base leading-tight">{place.name}</h4>
-            <span className="text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full shrink-0 mt-0.5">
+            <span className="text-[10px] bg-white/15 text-white/85 px-2 py-0.5 rounded-full shrink-0 mt-0.5">
               {place.category}
             </span>
           </div>
@@ -270,7 +270,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
                 {place.rating.toFixed(1)}
               </span>
             </div>
-            <span className="text-white/40 text-xs">
+            <span className="text-white/70 text-xs">
               {place.totalRatings.toLocaleString("pt-BR")} avaliações
             </span>
             {place.priceLevel > 0 && (
@@ -282,21 +282,21 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
         </div>
 
         {/* Localização */}
-        <div className="flex items-center gap-1.5 text-xs text-white/50">
+        <div className="flex items-center gap-1.5 text-xs text-white/75">
           <MapPin className="w-3 h-3 text-amber-400/60 shrink-0" />
           <span className="truncate">{place.neighborhood} · {place.address.split(",")[0]}</span>
         </div>
 
         {/* Resumo IA */}
         {place.aiSummary && (
-          <p className="text-white/70 text-sm leading-relaxed">{place.aiSummary}</p>
+          <p className="text-white/90 text-sm leading-relaxed">{place.aiSummary}</p>
         )}
 
         {/* Destaques */}
         {place.highlights.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {place.highlights.map((h, i) => (
-              <span key={i} className="text-xs bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/15 px-2.5 py-1 rounded-full flex items-center gap-1">
+              <span key={i} className="text-xs bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full flex items-center gap-1">
                 <ThumbsUp className="w-2.5 h-2.5" />
                 {h}
               </span>
@@ -306,7 +306,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
 
         {/* Ponto negativo (se houver) */}
         {place.negativeReviews.length > 0 && (
-          <div className="flex items-start gap-2 text-xs text-red-400/60 bg-red-500/5 border border-red-500/10 rounded-xl px-3 py-2">
+          <div className="flex items-start gap-2 text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
             <ThumbsDown className="w-3 h-3 mt-0.5 shrink-0" />
             <span className="line-clamp-2">{place.negativeReviews[0]?.slice(0, 80)}...</span>
           </div>
@@ -315,7 +315,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
         {/* Botão expandir/recolher */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-center gap-1.5 text-xs text-amber-400/60 hover:text-amber-400 py-1 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 py-1 transition-colors font-medium"
         >
           {expanded ? (
             <><ChevronUp className="w-3.5 h-3.5" /> Mostrar menos</>
@@ -326,20 +326,20 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
 
         {/* Seção expandida: reviews + horários + contato */}
         {expanded && (
-          <div className="space-y-4 pt-2 border-t border-white/10">
+            <div className="space-y-4 pt-2 border-t border-white/20">
             {/* Reviews */}
             <ReviewsCarousel reviews={place.reviews || []} />
 
             {/* Horários */}
             {place.weekdayHours && place.weekdayHours.length > 0 && (
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-xs text-white/50 font-medium uppercase tracking-wide">
+                <div className="flex items-center gap-2 text-xs text-white/80 font-medium uppercase tracking-wide">
                   <Clock className="w-3 h-3" />
                   Horários
                 </div>
                 <div className="space-y-0.5">
                   {place.weekdayHours.map((h, i) => (
-                    <p key={i} className="text-xs text-white/50">{h}</p>
+                    <p key={i} className="text-xs text-white/75">{h}</p>
                   ))}
                 </div>
               </div>
@@ -351,7 +351,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
                 {place.phone && (
                   <a
                     href={`tel:${place.phone}`}
-                    className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 text-white/60 px-3 py-1.5 rounded-xl transition-colors"
+                    className="flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white/85 px-3 py-1.5 rounded-xl transition-colors"
                   >
                     <Phone className="w-3 h-3" />
                     {place.phone}
@@ -362,7 +362,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
                     href={place.website}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 text-white/60 px-3 py-1.5 rounded-xl transition-colors"
+                    className="flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white/85 px-3 py-1.5 rounded-xl transition-colors"
                   >
                     <Globe className="w-3 h-3" />
                     Site oficial
@@ -388,7 +388,7 @@ function PlaceCard({ place, rank }: { place: PlaceInfo; rank: number }) {
             href={place.mapsUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 py-2.5 rounded-xl transition-all"
+            className="flex items-center justify-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 border border-white/20 text-white/90 py-2.5 rounded-xl transition-all"
           >
             <Navigation className="w-3.5 h-3.5" />
             Ver no Maps
@@ -424,7 +424,7 @@ function ChatMessage({ message }: { message: Message }) {
         <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
           isUser
             ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-tr-sm font-medium shadow-lg shadow-amber-500/20"
-            : "bg-white/8 text-white/90 rounded-tl-sm border border-white/10"
+            : "bg-[#1e1c1b] text-white rounded-tl-sm border border-white/15"
         }`}>
           {message.isLoading ? (
             <div className="flex items-center gap-3">
@@ -437,12 +437,12 @@ function ChatMessage({ message }: { message: Message }) {
                   />
                 ))}
               </div>
-              <span className="text-white/40 text-xs">O Indicador está pesquisando...</span>
+              <span className="text-white/70 text-xs">O Indicador está pesquisando...</span>
             </div>
           ) : isUser ? (
             <span>{message.content}</span>
           ) : (
-            <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ul>li]:mb-1 [&>strong]:text-amber-300">
+            <div className="prose prose-invert prose-sm max-w-none text-white [&>p]:mb-2 [&>p:last-child]:mb-0 [&>p]:text-white [&>ul]:mb-2 [&>ul>li]:mb-1 [&>ul>li]:text-white [&>ol>li]:text-white [&>h1]:text-white [&>h2]:text-amber-300 [&>h3]:text-amber-300 [&>strong]:text-amber-300 [&>strong]:font-bold">
               <Streamdown>{message.content}</Streamdown>
             </div>
           )}
@@ -459,7 +459,7 @@ function ChatMessage({ message }: { message: Message }) {
                   {message.recommendedPlaces.length} lugar{message.recommendedPlaces.length > 1 ? "es" : ""} indicado{message.recommendedPlaces.length > 1 ? "s" : ""}
                 </span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-white/30">
+              <div className="flex items-center gap-1 text-xs text-white/65">
                 <Zap className="w-3 h-3" />
                 Baseado em avaliações reais do Google
               </div>
@@ -476,7 +476,7 @@ function ChatMessage({ message }: { message: Message }) {
 
         {/* Timestamp */}
         {message.createdAt && !message.isLoading && (
-          <div className={`flex items-center gap-1 text-xs text-white/25 ${isUser ? "flex-row-reverse" : ""}`}>
+          <div className={`flex items-center gap-1 text-xs text-white/50 ${isUser ? "flex-row-reverse" : ""}`}>
             <Clock className="w-3 h-3" />
             {new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
           </div>
@@ -522,7 +522,7 @@ function WelcomeScreen({ quizCompleted, quizLoading, onSend, disabled }: {
         <h2 className="text-3xl font-bold text-white font-['Playfair_Display']">
           O Indicador 🗺️
         </h2>
-        <p className="text-white/50 max-w-sm mx-auto text-sm leading-relaxed">
+        <p className="text-white/80 max-w-sm mx-auto text-sm leading-relaxed">
           Seu guia gastronômico com IA para São Paulo. Recomendações baseadas em <strong className="text-amber-400">avaliações reais do Google</strong>, personalizadas para o seu gosto.
         </p>
       </div>
@@ -534,10 +534,10 @@ function WelcomeScreen({ quizCompleted, quizLoading, onSend, disabled }: {
           { icon: "🤖", label: "Powered by", value: "IA" },
           { icon: "📍", label: "Foco em", value: "São Paulo" },
         ].map((stat) => (
-          <div key={stat.label} className="flex flex-col items-center gap-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+          <div key={stat.label} className="flex flex-col items-center gap-1 bg-white/8 border border-white/20 rounded-2xl px-4 py-3">
             <span className="text-xl">{stat.icon}</span>
             <span className="text-white font-bold text-sm">{stat.value}</span>
-            <span className="text-white/40 text-[10px]">{stat.label}</span>
+            <span className="text-white/65 text-[10px]">{stat.label}</span>
           </div>
         ))}
       </div>
@@ -549,7 +549,7 @@ function WelcomeScreen({ quizCompleted, quizLoading, onSend, disabled }: {
             <Heart className="w-4 h-4 text-purple-400" />
             <p className="text-purple-300 text-sm font-semibold">Personalize suas indicações!</p>
           </div>
-          <p className="text-white/50 text-xs mb-3 leading-relaxed">
+          <p className="text-white/80 text-xs mb-3 leading-relaxed">
             Responda 7 perguntas rápidas e receba recomendações ainda mais precisas para o seu perfil.
           </p>
           <Link href="/quiz">
@@ -563,7 +563,7 @@ function WelcomeScreen({ quizCompleted, quizLoading, onSend, disabled }: {
 
       {/* Sugestões rápidas */}
       <div className="w-full max-w-lg space-y-3">
-        <p className="text-xs text-white/30 flex items-center justify-center gap-1.5">
+        <p className="text-xs text-white/65 flex items-center justify-center gap-1.5">
           <MessageSquare className="w-3 h-3" />
           Experimente perguntar:
         </p>
@@ -573,7 +573,7 @@ function WelcomeScreen({ quizCompleted, quizLoading, onSend, disabled }: {
               key={i}
               onClick={() => onSend(s.text)}
               disabled={disabled}
-              className="flex items-center gap-2 text-left text-xs bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-500/30 text-white/60 hover:text-white px-3 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-40 group"
+              className="flex items-center gap-2 text-left text-xs bg-white/8 hover:bg-white/15 border border-white/20 hover:border-amber-500/50 text-white/85 hover:text-white px-3 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-40 group"
             >
               <span className="text-base group-hover:scale-110 transition-transform">{s.icon}</span>
               <span>{s.text}</span>
@@ -662,7 +662,7 @@ export default function Chat() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0908] flex items-center justify-center">
+      <div className="min-h-screen bg-[#111010] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -671,9 +671,9 @@ export default function Chat() {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="min-h-screen bg-[#0a0908] flex flex-col">
+    <div className="min-h-screen bg-[#111010] flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0a0908]/95 backdrop-blur-md border-b border-white/8 px-4 py-3">
+      <div className="sticky top-0 z-10 bg-[#111010]/95 backdrop-blur-md border-b border-white/15 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
@@ -683,7 +683,7 @@ export default function Chat() {
               <h1 className="text-white font-bold text-sm font-['Playfair_Display']">O Indicador</h1>
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                <p className="text-white/40 text-xs">Guia gastronômico com IA · São Paulo</p>
+                <p className="text-white/70 text-xs">Guia gastronômico com IA · São Paulo</p>
               </div>
             </div>
           </div>
@@ -701,7 +701,7 @@ export default function Chat() {
                 variant="ghost"
                 size="sm"
                 onClick={() => window.location.reload()}
-                className="text-white/40 hover:text-white hover:bg-white/8 text-xs"
+                className="text-white/70 hover:text-white hover:bg-white/10 text-xs"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Novo
@@ -733,7 +733,7 @@ export default function Chat() {
       </div>
 
       {/* Input */}
-      <div className="sticky bottom-0 bg-[#0a0908]/95 backdrop-blur-md border-t border-white/8 px-4 py-4">
+      <div className="sticky bottom-0 bg-[#111010]/95 backdrop-blur-md border-t border-white/15 px-4 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-3 items-end">
             <div className="flex-1 bg-white/5 border border-white/10 rounded-2xl overflow-hidden focus-within:border-amber-500/40 focus-within:bg-white/8 transition-all">
@@ -745,7 +745,7 @@ export default function Chat() {
                 placeholder="Pergunte sobre restaurantes, bares, shoppings em SP..."
                 rows={1}
                 disabled={isSending || !sessionId}
-                className="w-full bg-transparent text-white placeholder-white/25 text-sm px-4 py-3 resize-none outline-none min-h-[44px] max-h-32 disabled:opacity-50"
+                className="w-full bg-transparent text-white placeholder-white/50 text-sm px-4 py-3 resize-none outline-none min-h-[44px] max-h-32 disabled:opacity-50"
                 onInput={(e) => {
                   const t = e.target as HTMLTextAreaElement;
                   t.style.height = "auto";
@@ -765,7 +765,7 @@ export default function Chat() {
               )}
             </Button>
           </div>
-          <p className="text-xs text-white/15 text-center mt-2">
+          <p className="text-xs text-white/50 text-center mt-2">
             Enter para enviar · Shift+Enter para nova linha
           </p>
         </div>
