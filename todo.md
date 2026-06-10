@@ -110,3 +110,18 @@
 - [x] Integrar fluxo de upload ao missionsRouter: sessionId/missionId passados ao backend, pontos creditados persistidos no banco
 - [x] Tela de sucesso exibe pontos reais ganhos quando missão está ativa (via sessionStorage)
 - [x] Contexto de missão armazenado em sessionStorage para persistência entre navegações
+
+## Fase 13: Chat Inteligente com IA e Recomendações Personalizadas
+
+- [x] Schema: tabelas user_quiz_profiles, chat_sessions, chat_messages, places_cache
+- [x] Migration e aplicação no banco
+- [x] Integração Google Places API (Text Search, Place Details, Reviews)
+- [x] Função de busca e cache de avaliações Google para POIs em SP (placesService.ts)
+- [x] Backend: router chat (createSession, sendMessage com LLM, getHistory, quiz.save, quiz.getProfile)
+- [x] Backend: lógica de recomendação com LLM usando perfil do usuário + avaliações Google
+- [x] Quiz de perfil: 7 perguntas interativas (culinária, orçamento, ambiente, companhia, bairros, interesses, restrições)
+- [x] Interface de chat imersiva com animação de digitação e Streamdown para markdown
+- [x] Cards de recomendação ricos: nome, nota Google, resumo IA, destaques, avaliações negativas, link Maps
+- [x] Suporte a múltiplas categorias: restaurantes, passeios, shoppings, comércios, postos, outros POIs
+- [x] Histórico de conversas por sessão
+- [x] Rota /chat e /quiz integradas no App.tsx e navbar (ícone MessageCircle)

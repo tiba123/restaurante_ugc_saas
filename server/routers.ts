@@ -56,6 +56,18 @@ import {
 } from "./db";
 import { storagePut } from "./storage";
 import { generateAutoTags, serializeTags, deserializeTags, getTagMeta } from "./autoTags";
+import { invokeLLM } from "./_core/llm";
+import {
+  getOrCreateQuizProfile,
+  updateQuizProfile,
+  getOrCreateChatSession,
+  getUserChatSessions,
+  updateChatSessionTitle,
+  saveChatMessage,
+  getChatHistory,
+  searchCachedPlaces,
+} from "./db";
+import { searchPlaces, PlaceInfo } from "./placesService";
 
 // ─── Auth Router ──────────────────────────────────────────────────────────────
 const authRouter = router({
@@ -1010,6 +1022,193 @@ const missionsRouterDef = router({
   }),
 });
 
+// ─── Chat Router ─────────────────────────────────────────────────────────────
+const chatRouter = router({
+  // ── Quiz de Perfil ──────────────────────────────────────────────────────────
+  quiz: router({
+    getProfile: protectedProcedure.query(async ({ ctx }) => {
+      return getOrCreateQuizProfile(ctx.user.id);
+    }),
+    save: protectedProcedure
+      .input(z.object({
+        cuisinePrefs: z.array(z.string()).optional(),
+        budgetRange: z.enum(["economico", "moderado", "premium", "luxo"]).optional(),
+        ambience: z.array(z.string()).optional(),
+        companionType: z.enum(["sozinho", "casal", "amigos", "familia", "negocios"]).optional(),
+        preferredNeighborhoods: z.array(z.string()).optional(),
+        interests: z.array(z.string()).optional(),
+        dietaryRestrictions: z.array(z.string()).optional(),
+        quizCompleted: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await updateQuizProfile(ctx.user.id, input);
+        return { success: true };
+      }),
+  }),
+
+  // ── Sessões de Chat ──────────────────────────────────────────────────────────
+  createSession: protectedProcedure
+    .input(z.object({ sessionKey: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getOrCreateChatSession(ctx.user.id, input.sessionKey);
+      return session;
+    }),
+
+  getSessions: protectedProcedure.query(async ({ ctx }) => {
+    return getUserChatSessions(ctx.user.id);
+  }),
+
+  getHistory: protectedProcedure
+    .input(z.object({ sessionId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      // Validar ownership: sessão deve pertencer ao usuário logado
+      const sessions = await getUserChatSessions(ctx.user.id);
+      const owned = sessions.find((s) => s.id === input.sessionId);
+      if (!owned) throw new TRPCError({ code: "FORBIDDEN", message: "Sessão não encontrada" });
+      return getChatHistory(input.sessionId);
+    }),
+
+  // ── Enviar Mensagem ──────────────────────────────────────────────────────────
+  sendMessage: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+      message: z.string().min(1).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Validar ownership da sessão
+      const sessions = await getUserChatSessions(ctx.user.id);
+      const owned = sessions.find((s) => s.id === input.sessionId);
+      if (!owned) throw new TRPCError({ code: "FORBIDDEN", message: "Sessão não encontrada" });
+
+      // Salvar mensagem do usuário
+      await saveChatMessage(input.sessionId, "user", input.message);
+
+      // Buscar perfil do quiz para personalização
+      const quizProfile = await getOrCreateQuizProfile(ctx.user.id);
+
+      // Buscar histórico recente (últimas 6 mensagens)
+      const history = await getChatHistory(input.sessionId);
+      const recentHistory = history.slice(-6);
+
+      // Buscar lugares relevantes no Google Places
+      let placesContext = "";
+      let recommendedPlaceIds: string[] = [];
+      let foundPlaces: PlaceInfo[] = [];
+
+      try {
+        // Extrair query de busca da mensagem do usuário
+        const queryResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: "Você é um assistente que extrai queries de busca de lugares de mensagens de usuários. Responda apenas com JSON.",
+            },
+            {
+              role: "user",
+              content: `Mensagem: "${input.message}"
+
+Extraia a melhor query para buscar no Google Places em São Paulo. Se não houver busca de lugar, retorne null.
+Exemplo: {"query": "sushi Itaim Bibi", "shouldSearch": true}`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "search_query",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  query: { type: "string" },
+                  shouldSearch: { type: "boolean" },
+                },
+                required: ["query", "shouldSearch"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const queryContent = queryResponse.choices?.[0]?.message?.content;
+        if (queryContent && typeof queryContent === "string") {
+          const parsed = JSON.parse(queryContent);
+          if (parsed.shouldSearch && parsed.query) {
+            foundPlaces = await searchPlaces(parsed.query, 4);
+            recommendedPlaceIds = foundPlaces.map((p) => p.placeId);
+
+            if (foundPlaces.length > 0) {
+              placesContext = `\n\nLUGARES ENCONTRADOS NO GOOGLE PLACES:\n${foundPlaces
+                .map(
+                  (p, i) =>
+                    `${i + 1}. **${p.name}** (${p.category}) - ${p.neighborhood}\n` +
+                    `   Nota: ${p.rating}/5 (${p.totalRatings} avaliações)\n` +
+                    `   ${p.aiSummary || ""}\n` +
+                    `   Destaques: ${p.highlights.join(", ")}\n` +
+                    `   Pontos negativos: ${p.negativeReviews.slice(0, 1).join("; ") || "Nenhum identificado"}\n` +
+                    `   Link: ${p.mapsUrl}`
+                )
+                .join("\n\n")}`;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[chatRouter] Places search failed:", e);
+      }
+
+      // Construir contexto do perfil do usuário
+      const profileContext = quizProfile?.quizCompleted
+        ? `\n\nPERFIL DO USUÁRIO:\n- Culinárias preferidas: ${(quizProfile.cuisinePrefs as string[] || []).join(", ") || "Variadas"}\n- Orçamento: ${quizProfile.budgetRange || "moderado"}\n- Ambiente preferido: ${(quizProfile.ambience as string[] || []).join(", ") || "Qualquer"}\n- Costuma sair: ${quizProfile.companionType || "amigos"}\n- Bairros preferidos: ${(quizProfile.preferredNeighborhoods as string[] || []).join(", ") || "Qualquer"}\n- Interesses: ${(quizProfile.interests as string[] || []).join(", ") || "Variados"}\n- Restrições alimentares: ${(quizProfile.dietaryRestrictions as string[] || []).join(", ") || "Nenhuma"}`
+        : "";
+
+      // Gerar resposta com LLM
+      const systemPrompt = `Você é o Tastee AI, assistente gastronômico especializado em São Paulo. 
+Sua missão é ajudar usuários a descobrir os melhores restaurantes, bares, cafés, shoppings, postos de gasolina e outros pontos de interesse em SP.
+
+Diretrizes:
+- Seja amigável, entusiasmado e conhecedor da cena gastronômica paulistana
+- Sempre explique POR QUÊ cada lugar é recomendado com base no perfil do usuário
+- Mencione pontos positivos E negativos para ser honesto
+- Use emojis com moderação para deixar a conversa mais animada
+- Quando recomendar lugares, apresente-os de forma organizada e clara
+- Se não encontrar lugares específicos, sugira alternativas ou peça mais detalhes
+- Responda sempre em português brasileiro${profileContext}`;
+
+      const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+        { role: "system", content: systemPrompt },
+        ...recentHistory.slice(0, -1).map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+        { role: "user", content: input.message + placesContext },
+      ];
+
+      const llmResponse = await invokeLLM({ messages });
+      const assistantContent = llmResponse.choices?.[0]?.message?.content;
+      const responseText = typeof assistantContent === "string" ? assistantContent : "Desculpe, não consegui processar sua mensagem. Tente novamente!";
+
+      // Salvar resposta do assistente
+      const savedMsg = await saveChatMessage(input.sessionId, "assistant", responseText, recommendedPlaceIds);
+
+      // Atualizar título da sessão se for a primeira mensagem
+      if (history.length <= 1) {
+        const shortTitle = input.message.slice(0, 50) + (input.message.length > 50 ? "..." : "");
+        await updateChatSessionTitle(input.sessionId, shortTitle);
+      }
+
+      return {
+        message: savedMsg,
+        recommendedPlaces: foundPlaces,
+      };
+    }),
+
+  // ── Busca de Lugares ─────────────────────────────────────────────────────────
+  searchPlaces: protectedProcedure
+    .input(z.object({ query: z.string().min(1), limit: z.number().default(5) }))
+    .mutation(async ({ input }) => {
+      return searchPlaces(input.query, input.limit);
+    }),
+});
+
 // ─── App Router ───────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
@@ -1022,6 +1221,7 @@ export const appRouter = router({
   admin: adminRouter,
   social: socialRouter,
   missions: missionsRouterDef,
+  chat: chatRouter,
 });
 
 export type AppRouter = typeof appRouter;

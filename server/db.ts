@@ -20,6 +20,10 @@ import {
   videoLikes,
   videos,
   friendships,
+  userQuizProfiles,
+  chatSessions,
+  chatMessages,
+  placesCache,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -744,4 +748,134 @@ export async function getFriendsWhoVisited(restaurantId: number, userId: number)
     ...u,
     lastVisit: visits.find((v) => v.userId === u.id)?.visitedAt,
   }));
+}
+
+// ─── Quiz de Perfil ───────────────────────────────────────────────────────────
+export async function getOrCreateQuizProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const existing = await db.select().from(userQuizProfiles).where(eq(userQuizProfiles.userId, userId)).limit(1);
+  if (existing[0]) return existing[0];
+  await db.insert(userQuizProfiles).values({ userId, quizCompleted: false });
+  const created = await db.select().from(userQuizProfiles).where(eq(userQuizProfiles.userId, userId)).limit(1);
+  return created[0] ?? null;
+}
+
+export async function updateQuizProfile(userId: number, data: {
+  cuisinePrefs?: string[];
+  budgetRange?: "economico" | "moderado" | "premium" | "luxo";
+  ambience?: string[];
+  companionType?: "sozinho" | "casal" | "amigos" | "familia" | "negocios";
+  preferredNeighborhoods?: string[];
+  interests?: string[];
+  dietaryRestrictions?: string[];
+  quizCompleted?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(userQuizProfiles)
+    .values({ userId, ...data })
+    .onDuplicateKeyUpdate({ set: data });
+}
+
+// ─── Chat Sessions ────────────────────────────────────────────────────────────
+export async function getOrCreateChatSession(userId: number, sessionKey: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const existing = await db.select().from(chatSessions).where(eq(chatSessions.sessionKey, sessionKey)).limit(1);
+  if (existing[0]) return existing[0];
+  await db.insert(chatSessions).values({ userId, sessionKey, title: "Nova conversa" });
+  const created = await db.select().from(chatSessions).where(eq(chatSessions.sessionKey, sessionKey)).limit(1);
+  return created[0] ?? null;
+}
+
+export async function getUserChatSessions(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(chatSessions)
+    .where(eq(chatSessions.userId, userId))
+    .orderBy(desc(chatSessions.updatedAt))
+    .limit(20);
+}
+
+export async function updateChatSessionTitle(sessionId: number, title: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(chatSessions).set({ title }).where(eq(chatSessions.id, sessionId));
+}
+
+// ─── Chat Messages ────────────────────────────────────────────────────────────
+export async function saveChatMessage(sessionId: number, role: "user" | "assistant", content: string, recommendedPlaces?: string[]) {
+  const db = await getDb();
+  if (!db) return null;
+  await db.insert(chatMessages).values({ sessionId, role, content, recommendedPlaces: recommendedPlaces ?? [] });
+  const msgs = await db.select().from(chatMessages)
+    .where(eq(chatMessages.sessionId, sessionId))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(1);
+  return msgs[0] ?? null;
+}
+
+export async function getChatHistory(sessionId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(chatMessages)
+    .where(eq(chatMessages.sessionId, sessionId))
+    .orderBy(chatMessages.createdAt);
+}
+
+// ─── Places Cache ─────────────────────────────────────────────────────────────
+export async function getCachedPlace(placeId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(placesCache).where(eq(placesCache.placeId, placeId)).limit(1);
+  const place = result[0];
+  if (!place) return null;
+  // Check TTL (7 days)
+  if (place.expiresAt && new Date() > place.expiresAt) return null;
+  return place;
+}
+
+export async function upsertPlaceCache(data: {
+  placeId: string;
+  name: string;
+  category?: string;
+  address?: string;
+  neighborhood?: string;
+  city?: string;
+  rating?: string;
+  totalRatings?: number;
+  priceLevel?: number;
+  types?: string[];
+  positiveReviews?: string[];
+  negativeReviews?: string[];
+  aiSummary?: string;
+  highlights?: string[];
+  mapsUrl?: string;
+  website?: string;
+  phone?: string;
+  openNow?: boolean;
+  photoUrl?: string;
+  lat?: string;
+  lng?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const values = { ...data, cachedAt: new Date(), expiresAt };
+  await db.insert(placesCache).values(values).onDuplicateKeyUpdate({ set: values });
+}
+
+export async function searchCachedPlaces(query: string, limit = 5) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(placesCache)
+    .where(
+      or(
+        like(placesCache.name, `%${query}%`),
+        like(placesCache.category, `%${query}%`),
+        like(placesCache.neighborhood, `%${query}%`)
+      )
+    )
+    .limit(limit);
 }

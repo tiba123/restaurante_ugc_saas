@@ -29,6 +29,13 @@
       "when": 1779677940786,
       "tag": "0003_first_ink",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1781055038815,
+      "tag": "0004_lean_jubilee",
+      "breakpoints": true
     }
   ]
 }

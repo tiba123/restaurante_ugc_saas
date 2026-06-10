@@ -393,3 +393,82 @@ export const userCredits = mysqlTable("user_credits", {
 });
 
 export type UserCredit = typeof userCredits.$inferSelect;
+
+// ─── Quiz de Perfil do Usuário ────────────────────────────────────────────────
+export const userQuizProfiles = mysqlTable("user_quiz_profiles", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  // Preferências de culinária
+  cuisinePrefs: json("cuisinePrefs").$type<string[]>(),
+  // Orçamento por pessoa
+  budgetRange: mysqlEnum("budgetRange", ["economico", "moderado", "premium", "luxo"]).default("moderado"),
+  // Tipo de ambiente preferido
+  ambience: json("ambience").$type<string[]>(),
+  // Com quem costuma sair
+  companionType: mysqlEnum("companionType", ["sozinho", "casal", "amigos", "familia", "negocios"]).default("amigos"),
+  // Bairros preferidos em SP
+  preferredNeighborhoods: json("preferredNeighborhoods").$type<string[]>(),
+  // Interesses além de restaurantes
+  interests: json("interests").$type<string[]>(),
+  // Restrições alimentares
+  dietaryRestrictions: json("dietaryRestrictions").$type<string[]>(),
+  // Quiz concluído?
+  quizCompleted: boolean("quizCompleted").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type UserQuizProfile = typeof userQuizProfiles.$inferSelect;
+
+// ─── Sessões de Chat ──────────────────────────────────────────────────────────
+export const chatSessions = mysqlTable("chat_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  sessionKey: varchar("sessionKey", { length: 64 }).notNull().unique(),
+  title: varchar("title", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ChatSession = typeof chatSessions.$inferSelect;
+
+// ─── Mensagens de Chat ────────────────────────────────────────────────────────
+export const chatMessages = mysqlTable("chat_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull(),
+  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+  content: text("content").notNull(),
+  // Lugares recomendados nesta mensagem (JSON array de place_ids)
+  recommendedPlaces: json("recommendedPlaces").$type<string[]>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type ChatMessage = typeof chatMessages.$inferSelect;
+
+// ─── Cache de Lugares (Google Places) ────────────────────────────────────────
+export const placesCache = mysqlTable("places_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  placeId: varchar("placeId", { length: 255 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: varchar("category", { length: 100 }),
+  address: text("address"),
+  neighborhood: varchar("neighborhood", { length: 100 }),
+  city: varchar("city", { length: 100 }).default("São Paulo"),
+  rating: decimal("rating", { precision: 3, scale: 1 }),
+  totalRatings: int("totalRatings").default(0),
+  priceLevel: int("priceLevel"), // 0-4 (Google price level)
+  types: json("types").$type<string[]>(),
+  // Avaliações positivas e negativas extraídas do Google
+  positiveReviews: json("positiveReviews").$type<string[]>(),
+  negativeReviews: json("negativeReviews").$type<string[]>(),
+  // Resumo gerado por IA
+  aiSummary: text("aiSummary"),
+  highlights: json("highlights").$type<string[]>(),
+  mapsUrl: text("mapsUrl"),
+  website: text("website"),
+  phone: varchar("phone", { length: 50 }),
+  openNow: boolean("openNow"),
+  photoUrl: text("photoUrl"),
+  lat: decimal("lat", { precision: 10, scale: 7 }),
+  lng: decimal("lng", { precision: 10, scale: 7 }),
+  cachedAt: timestamp("cachedAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt"),
+});
+export type PlaceCache = typeof placesCache.$inferSelect;
